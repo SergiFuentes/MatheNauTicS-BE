@@ -8,7 +8,35 @@ It is built with **Kotlin**, **Spring Boot**, and **PostgreSQL**, using **Spring
 
 ---
 
-## Overview
+## Table of Contents
+
+* [Overview](#overview)
+* [Features](#features)
+* [Technology Stack](#technology-stack)
+* [Requirements](#requirements)
+* [Project Structure](#project-structure)
+* [Database](#database)
+* [Database Schema](#database-schema)
+* [Database Migrations](#database-migrations)
+* [Configuration](#configuration)
+* [Running the Application](#running-the-application)
+* [API](#api)
+* [CORS](#cors)
+* [Security](#security)
+* [Testing](#testing)
+* [Frontend Integration](#frontend-integration)
+* [Dependencies](#dependencies)
+* [Build Configuration](#build-configuration)
+* [Development Workflow](#development-workflow)
+* [Current Status](#current-status)
+* [Roadmap](#roadmap)
+* [Known Limitations](#known-limitations)
+* [Security Considerations](#security-considerations)
+* [License](#license)
+
+---
+
+# Overview
 
 MatheNauTicS is an educational game focused on mathematics and multiplication tables.
 
@@ -69,7 +97,7 @@ The frontend is a Phaser 3 web application that communicates with this backend t
 
 The API supports both guest and registered players.
 
-### Registered users
+### Registered Users
 
 Registered users have:
 
@@ -82,7 +110,7 @@ Registered users have:
 
 Passwords are never stored in plain text and are hashed using BCrypt.
 
-### Guest users
+### Guest Users
 
 Players can start playing without creating an account.
 
@@ -97,7 +125,7 @@ Guest users:
 * Are excluded from the leaderboard
 * Can later be converted into registered users
 
-### Guest → Registered conversion
+### Guest → Registered Conversion
 
 The registration flow allows an existing guest player to create an account while preserving their existing game data.
 
@@ -105,7 +133,7 @@ This means that registering does not require starting the game again from scratc
 
 ---
 
-# Game Sessions
+## Game Sessions
 
 Completed games can be persisted through the API.
 
@@ -127,17 +155,17 @@ Game sessions are used as the basis for player statistics and leaderboard inform
 
 ---
 
-# Player Progress
+## Player Progress
 
 Player progression is persisted independently from individual game sessions.
 
 Depending on the game mode, the backend stores:
 
-### Adventure mode
+### Adventure Mode
 
 * Current level
 
-### Training mode
+### Training Mode
 
 * Current multiplication table
 
@@ -145,7 +173,7 @@ Progress is updated when the player advances through the corresponding game cont
 
 ---
 
-# Leaderboard
+## Leaderboard
 
 The backend provides a score-based leaderboard.
 
@@ -234,7 +262,7 @@ src/
     └── kotlin/
 ```
 
-### Main layers
+### Main Layers
 
 #### `application/controller`
 
@@ -258,7 +286,7 @@ Contains request and response data transfer objects.
 
 #### `config`
 
-Contains application configuration such as database, CORS and other Spring configuration.
+Contains application configuration such as database, CORS, and other Spring configuration.
 
 ---
 
@@ -383,7 +411,7 @@ The backend currently requires:
 DB_PASSWORD=<Supabase database password>
 ```
 
-The database URL, username and other configuration values are defined in `application.yaml`.
+The database URL, username, and other configuration values are defined in `application.yaml`.
 
 ### Example
 
@@ -401,36 +429,36 @@ spring:
 
 # Running the Application
 
-## Clone the repository
+## Clone the Repository
 
 ```bash
 git clone <repository-url>
 cd <repository-directory>
 ```
 
-## Configure environment variables
+## Configure Environment Variables
 
 Set the database password before starting the application.
 
-Linux/macOS:
+### Linux / macOS
 
 ```bash
 export DB_PASSWORD="your-password"
 ```
 
-Windows PowerShell:
+### Windows PowerShell
 
 ```powershell
 $env:DB_PASSWORD="your-password"
 ```
 
-## Build the project
+## Build the Project
 
 ```bash
 ./gradlew clean build
 ```
 
-## Run the application
+## Run the Application
 
 ```bash
 ./gradlew bootRun
@@ -452,11 +480,9 @@ The API is versioned under:
 /api/v1
 ```
 
----
-
 ## Users
 
-### Create user
+### Create User
 
 ```http
 POST /api/v1/users
@@ -464,7 +490,7 @@ POST /api/v1/users
 
 Creates a guest or registered user.
 
-### Get user
+### Get User
 
 ```http
 GET /api/v1/users/{userId}
@@ -472,7 +498,7 @@ GET /api/v1/users/{userId}
 
 Returns the requested user's information.
 
-### Update user
+### Update User
 
 ```http
 PUT /api/v1/users/{userId}
@@ -480,7 +506,7 @@ PUT /api/v1/users/{userId}
 
 Updates user information.
 
-### Delete user
+### Delete User
 
 ```http
 DELETE /api/v1/users/{userId}
@@ -490,9 +516,9 @@ Deletes the user and associated data according to the configured database constr
 
 ---
 
-# Game Sessions
+## Game Sessions
 
-### Finish game
+### Finish Game
 
 ```http
 POST /api/v1/games/finish
@@ -500,7 +526,7 @@ POST /api/v1/games/finish
 
 Stores a completed game session.
 
-### Get player coins
+### Get Player Coins
 
 ```http
 GET /api/v1/games/player/coins?userId={userId}
@@ -508,7 +534,7 @@ GET /api/v1/games/player/coins?userId={userId}
 
 Returns the player's current accumulated coins.
 
-### Get leaderboard
+### Get Leaderboard
 
 ```http
 GET /api/v1/games/leaderboard
@@ -530,9 +556,9 @@ GET /api/v1/games/leaderboard?limit=10&offset=0&gameMode=training
 
 ---
 
-# Player Progress
+## Player Progress
 
-### Get progress
+### Get Progress
 
 ```http
 GET /api/v1/games/progress?userId={userId}
@@ -540,7 +566,7 @@ GET /api/v1/games/progress?userId={userId}
 
 Returns the player's current progression.
 
-### Update progress
+### Update Progress
 
 ```http
 POST /api/v1/games/progress
@@ -550,7 +576,7 @@ Updates the player's level and/or multiplication table depending on the selected
 
 ---
 
-# Health Check
+## Health Check
 
 The backend exposes a health endpoint:
 
@@ -589,7 +615,7 @@ When deploying the application, the production frontend origin must be added to 
 
 The current implementation includes several security and data-integrity mechanisms.
 
-### Password hashing
+## Password Hashing
 
 Passwords are hashed using BCrypt before being persisted.
 
@@ -605,11 +631,11 @@ password_hash
 
 Passwords are never stored in plain text.
 
-### Input validation
+## Input Validation
 
 Request DTOs are validated before reaching the business logic.
 
-### Database constraints
+## Database Constraints
 
 The database uses constraints to protect data integrity, including:
 
@@ -619,7 +645,7 @@ The database uses constraints to protect data integrity, including:
 * Non-negative coin validation
 * User/game relationships
 
-### Guest separation
+## Guest Separation
 
 Guest users are identified using:
 
