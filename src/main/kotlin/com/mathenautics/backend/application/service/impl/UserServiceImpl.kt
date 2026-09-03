@@ -1,5 +1,9 @@
 package com.mathenautics.backend.application.service.impl
 
+import com.mathenautics.backend.application.exception.EmailAlreadyExistsException
+import com.mathenautics.backend.application.exception.GuestConversionException
+import com.mathenautics.backend.application.exception.UsernameAlreadyExistsException
+import com.mathenautics.backend.application.exception.UserNotFoundException
 import com.mathenautics.backend.application.service.UserService
 import com.mathenautics.backend.domain.repository.UserRepository
 import com.mathenautics.backend.dto.UserCreateRequest
@@ -14,39 +18,76 @@ import java.util.UUID
 class UserServiceImpl(
     private val userRepository: UserRepository
 ) : UserService {
-
     @Transactional
     override fun createUser(request: UserCreateRequest): UserResponse {
-        require(request.username.isNotBlank()) { "Username is required" }
-        require(request.email.isNotBlank()) { "Email is required" }
-        require(request.password.length >= 6) { "Password must be at least 6 characters" }
-
-        val passwordHash = BCrypt.hashpw(request.password, BCrypt.gensalt())
+        validateCredentials(request.username, request.email, request.password)
+        ensureUnique(request.username, request.email, null)
 
         return userRepository.create(
-            username = request.username,
-            email = request.email,
-            passwordHash = passwordHash,
+            username = request.username.trim(),
+            email = request.email.trim().lowercase(),
+            passwordHash = BCrypt.hashpw(request.password, BCrypt.gensalt()),
             isGuest = request.isGuest
         )
     }
 
-    override fun getUser(userId: UUID): UserResponse {
-        return userRepository.findById(userId)
-            ?: throw IllegalArgumentException("User not found with id: $userId")
-    }
+    override fun getUser(userId: UUID): UserResponse =
+        userRepository.findById(userId) ?: throw UserNotFoundException()
 
     @Transactional
     override fun updateUser(userId: UUID, request: UserUpdateRequest): UserResponse {
-        val passwordHash = request.password?.let { BCrypt.hashpw(it, BCrypt.gensalt()) }
-        return userRepository.update(userId, request.username, request.email, passwordHash)
+        val current = getUser(userId)
+        request.username?.let {
+            require(it.isNotBlank()) { "Username is required" }
+            if (userRepository.existsByUsername(it.trim(), userId)) throw UsernameAlreadyExistsException()
+        }
+        request.email?.let {
+            require(isValidEmail(it)) { "Valid email is required" }
+            if (userRepository.existsByEmail(it.trim(), userId)) throw EmailAlreadyExistsException()
+        }
+        request.password?.let { require(it.length >= 6) { "Password must be at least 6 characters" } }
+
+        return userRepository.update(
+            userId = userId,
+            username = request.username?.trim(),
+            email = request.email?.trim()?.lowercase(),
+            passwordHash = request.password?.let { BCrypt.hashpw(it, BCrypt.gensalt()) }
+        )
+    }
+
+    @Transactional
+    override fun convertGuest(userId: UUID, request: UserCreateRequest): UserResponse {
+        val current = getUser(userId)
+        if (!current.isGuest) throw GuestConversionException("User is already registered")
+
+        validateCredentials(request.username, request.email, request.password)
+        ensureUnique(request.username, request.email, userId)
+
+        return userRepository.update(
+            userId = userId,
+            username = request.username.trim(),
+            email = request.email.trim().lowercase(),
+            passwordHash = BCrypt.hashpw(request.password, BCrypt.gensalt()),
+            isGuest = false
+        )
     }
 
     @Transactional
     override fun deleteUser(userId: UUID) {
-        val deleted = userRepository.delete(userId)
-        if (!deleted) {
-            throw IllegalArgumentException("User not found with id: $userId")
-        }
+        if (!userRepository.delete(userId)) throw UserNotFoundException()
     }
+
+    private fun validateCredentials(username: String, email: String, password: String) {
+        require(username.trim().isNotEmpty()) { "Username is required" }
+        require(isValidEmail(email)) { "Valid email is required" }
+        require(password.length >= 6) { "Password must be at least 6 characters" }
+    }
+
+    private fun ensureUnique(username: String, email: String, userId: UUID?) {
+        if (userRepository.existsByUsername(username.trim(), userId)) throw UsernameAlreadyExistsException()
+        if (userRepository.existsByEmail(email.trim(), userId)) throw EmailAlreadyExistsException()
+    }
+
+    private fun isValidEmail(email: String): Boolean =
+        Regex("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$").matches(email.trim())
 }

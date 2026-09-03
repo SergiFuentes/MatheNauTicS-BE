@@ -9,9 +9,18 @@ interface GameSessionService {
 
     fun getCurrentCoins(userId: UUID): PlayerCoinsResponse
 
-    fun getLeaderboard(limit: Int, offset: Int, gameMode: String? = null): List<LeaderboardEntry>
+    fun getLeaderboard(
+        limit: Int,
+        offset: Int,
+        gameMode: String? = null
+    ): List<LeaderboardEntry>
 
-    fun getPlayerProgress(userId: UUID): PlayerProgressResponse
+    fun getPlayerProgress(
+        userId: UUID,
+        gameMode: String
+    ): PlayerProgressResponse
 
-    fun updatePlayerProgress(request: PlayerProgressRequest): PlayerProgressResponse
+    fun updatePlayerProgress(
+        request: PlayerProgressRequest
+    ): PlayerProgressResponse
 }

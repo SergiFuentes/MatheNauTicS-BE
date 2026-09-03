@@ -6,5 +6,6 @@ data class LeaderboardEntry(
     val username: String,
     val score: Int,
     val totalCoins: Int,
-    val createdAt: OffsetDateTime
+    val createdAt: OffsetDateTime,
+    val gameMode: String
 )
