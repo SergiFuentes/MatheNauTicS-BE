@@ -7,6 +7,7 @@ import com.mathenautics.backend.domain.repository.UserRepository
 import com.mathenautics.backend.dto.*
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import java.time.OffsetDateTime
 import java.util.UUID
 
 /**
@@ -54,31 +55,58 @@ class GameSessionServiceImpl(
 
     override fun getCurrentCoins(userId: UUID): PlayerCoinsResponse {
         val total = gameSessionRepository.getCurrentCoins(userId)
+
         return PlayerCoinsResponse(
             userId = userId,
             totalCoins = total
         )
     }
 
-    override fun getLeaderboard(limit: Int, offset: Int, gameMode: String?): List<LeaderboardEntry> {
-        return gameSessionRepository.getLeaderboard(limit, offset, gameMode)
+    override fun getLeaderboard(
+        limit: Int,
+        offset: Int,
+        gameMode: String?
+    ): List<LeaderboardEntry> {
+        return gameSessionRepository.getLeaderboard(
+            limit,
+            offset,
+            gameMode
+        )
     }
 
-    @Transactional
-    override fun getPlayerProgress(userId: UUID): PlayerProgressResponse {
-        return progressRepository.getProgress(userId)
+    override fun getPlayerProgress(
+        userId: UUID,
+        gameMode: String
+    ): PlayerProgressResponse {
+        return progressRepository.getProgress(userId, gameMode)
             ?: PlayerProgressResponse(
                 userId = userId,
+                gameMode = gameMode,
                 currentLevel = 1,
-                lastPlayedAt = java.time.OffsetDateTime.now()
+                score = 0,
+                lives = 3,
+                coins = 0,
+                difficulty = "normal",
+                lastPlayedAt = OffsetDateTime.now()
             )
     }
 
     @Transactional
-    override fun updatePlayerProgress(request: PlayerProgressRequest): PlayerProgressResponse {
+    override fun updatePlayerProgress(
+        request: PlayerProgressRequest
+    ): PlayerProgressResponse {
         if (request.currentLevel < 1) {
             throw IllegalArgumentException("Level must be at least 1")
         }
-        return progressRepository.saveOrUpdate(request.userId, request.currentLevel)
+
+        return progressRepository.saveOrUpdate(
+            userId = request.userId,
+            gameMode = request.gameMode,
+            level = request.currentLevel,
+            score = request.score,
+            lives = request.lives,
+            coins = request.coins,
+            difficulty = request.difficulty
+        )
     }
 }

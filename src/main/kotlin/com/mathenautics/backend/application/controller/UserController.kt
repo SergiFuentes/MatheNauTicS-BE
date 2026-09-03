@@ -1,4 +1,3 @@
-// UserController.kt
 package com.mathenautics.backend.application.controller
 
 import com.mathenautics.backend.application.service.UserService
@@ -14,27 +13,27 @@ import java.util.UUID
 class UserController(
     private val userService: UserService
 ) {
-
     @PostMapping
-    fun createUser(@RequestBody request: UserCreateRequest): ResponseEntity<UserResponse> {
-        val created = userService.createUser(request)
-        return ResponseEntity.ok(created)
-    }
+    fun createUser(@RequestBody request: UserCreateRequest): ResponseEntity<UserResponse> =
+        ResponseEntity.ok(userService.createUser(request))
 
     @GetMapping("/{userId}")
-    fun getUser(@PathVariable userId: UUID): ResponseEntity<UserResponse> {
-        val user = userService.getUser(userId)
-        return ResponseEntity.ok(user)
-    }
+    fun getUser(@PathVariable userId: UUID): ResponseEntity<UserResponse> =
+        ResponseEntity.ok(userService.getUser(userId))
 
     @PutMapping("/{userId}")
     fun updateUser(
         @PathVariable userId: UUID,
         @RequestBody request: UserUpdateRequest
-    ): ResponseEntity<UserResponse> {
-        val updated = userService.updateUser(userId, request)
-        return ResponseEntity.ok(updated)
-    }
+    ): ResponseEntity<UserResponse> = ResponseEntity.ok(userService.updateUser(userId, request))
+
+    @PostMapping("/{userId}/convert")
+    fun convertGuest(
+        @PathVariable userId: UUID,
+        @RequestBody request: UserCreateRequest
+    ): ResponseEntity<UserResponse> = ResponseEntity.ok(
+        userService.convertGuest(userId, request.copy(isGuest = false))
+    )
 
     @DeleteMapping("/{userId}")
     fun deleteUser(@PathVariable userId: UUID): ResponseEntity<Unit> {

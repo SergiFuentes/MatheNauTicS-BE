@@ -68,21 +68,35 @@ class JdbcGameSessionRepository(
     }
 
     override fun getLeaderboard(limit: Int, offset: Int, gameMode: String?): List<LeaderboardEntry> {
-        val sql = """
-            SELECT username, game_mode, score, total_coins, created_at
-            FROM leaderboard
-            WHERE (:gameMode IS NULL OR game_mode = :gameMode)
-            ORDER BY score DESC
-            LIMIT :limit OFFSET :offset
-        """
+        // Build the SQL dynamically based on whether gameMode is provided
+        val sql = if (gameMode == null) {
+            """
+                SELECT username, game_mode, score, total_coins, created_at
+                FROM leaderboard
+                ORDER BY score DESC
+                LIMIT :limit OFFSET :offset
+            """
+        } else {
+            """
+                SELECT username, game_mode, score, total_coins, created_at
+                FROM leaderboard
+                WHERE game_mode = :gameMode
+                ORDER BY score DESC
+                LIMIT :limit OFFSET :offset
+            """
+        }
+
         val params = MapSqlParameterSource()
             .addValue("limit", limit)
             .addValue("offset", offset)
-            .addValue("gameMode", gameMode)
+        if (gameMode != null) {
+            params.addValue("gameMode", gameMode)
+        }
 
         return jdbcTemplate.query(sql, params) { rs, _ ->
             LeaderboardEntry(
                 username = rs.getString("username"),
+                gameMode = rs.getString("game_mode"),
                 score = rs.getInt("score"),
                 totalCoins = rs.getInt("total_coins"),
                 createdAt = rs.getObject("created_at")?.toOffsetDateTime()

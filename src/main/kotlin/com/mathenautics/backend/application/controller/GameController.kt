@@ -13,13 +13,17 @@ class GameController(
 ) {
 
     @PostMapping("/finish")
-    fun finishGame(@RequestBody request: GameResultRequest): ResponseEntity<GameResultResponse> {
+    fun finishGame(
+        @RequestBody request: GameResultRequest
+    ): ResponseEntity<GameResultResponse> {
         val response = gameService.finishGame(request)
         return ResponseEntity.ok(response)
     }
 
     @GetMapping("/player/coins")
-    fun getPlayerCoins(@RequestParam userId: UUID): ResponseEntity<PlayerCoinsResponse> {
+    fun getPlayerCoins(
+        @RequestParam userId: UUID
+    ): ResponseEntity<PlayerCoinsResponse> {
         val response = gameService.getCurrentCoins(userId)
         return ResponseEntity.ok(response)
     }
@@ -35,13 +39,18 @@ class GameController(
     }
 
     @GetMapping("/progress")
-    fun getProgress(@RequestParam userId: UUID): ResponseEntity<PlayerProgressResponse> {
-        val progress = gameService.getPlayerProgress(userId)
+    fun getProgress(
+        @RequestParam userId: UUID,
+        @RequestParam gameMode: String
+    ): ResponseEntity<PlayerProgressResponse> {
+        val progress = gameService.getPlayerProgress(userId, gameMode)
         return ResponseEntity.ok(progress)
     }
 
     @PostMapping("/progress")
-    fun updateProgress(@RequestBody request: PlayerProgressRequest): ResponseEntity<PlayerProgressResponse> {
+    fun updateProgress(
+        @RequestBody request: PlayerProgressRequest
+    ): ResponseEntity<PlayerProgressResponse> {
         val updated = gameService.updatePlayerProgress(request)
         return ResponseEntity.ok(updated)
     }
