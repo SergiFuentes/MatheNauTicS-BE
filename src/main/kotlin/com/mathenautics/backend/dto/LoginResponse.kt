@@ -6,5 +6,6 @@ data class LoginResponse(
     val userId: UUID,
     val username: String,
     val email: String,
-    val isGuest: Boolean = false
+    val isGuest: Boolean = false,
+    val token: String
 )

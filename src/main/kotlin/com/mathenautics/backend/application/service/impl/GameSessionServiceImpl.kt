@@ -10,9 +10,6 @@ import org.springframework.transaction.annotation.Transactional
 import java.time.OffsetDateTime
 import java.util.UUID
 
-/**
- * Implementation of GameSessionService.
- */
 @Service
 class GameSessionServiceImpl(
     private val gameSessionRepository: GameSessionRepository,
@@ -21,8 +18,7 @@ class GameSessionServiceImpl(
 ) : GameSessionService {
 
     @Transactional
-    override fun finishGame(request: GameResultRequest): GameResultResponse {
-        // Validations
+    override fun finishGame(userId: UUID, request: GameResultRequest): GameResultResponse {
         if (request.score < 0) {
             throw IllegalArgumentException("Score cannot be negative")
         }
@@ -33,12 +29,12 @@ class GameSessionServiceImpl(
             throw IllegalArgumentException("Duration cannot be negative")
         }
 
-        if (!userRepository.existsById(request.userId)) {
+        if (!userRepository.existsById(userId)) {
             throw IllegalArgumentException("User does not exist")
         }
 
         val result = gameSessionRepository.saveGameSession(
-            userId = request.userId,
+            userId = userId,
             gameMode = request.gameMode,
             score = request.score,
             coinsEarned = request.coinsEarned,
@@ -47,7 +43,7 @@ class GameSessionServiceImpl(
 
         return GameResultResponse(
             sessionId = result.sessionId,
-            userId = request.userId,
+            userId = userId,
             score = request.score,
             totalCoins = result.totalCoins
         )
@@ -93,6 +89,7 @@ class GameSessionServiceImpl(
 
     @Transactional
     override fun updatePlayerProgress(
+        userId: UUID,
         request: PlayerProgressRequest
     ): PlayerProgressResponse {
         if (request.currentLevel < 1) {
@@ -100,7 +97,7 @@ class GameSessionServiceImpl(
         }
 
         return progressRepository.saveOrUpdate(
-            userId = request.userId,
+            userId = userId,
             gameMode = request.gameMode,
             level = request.currentLevel,
             score = request.score,
