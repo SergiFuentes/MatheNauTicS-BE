@@ -5,7 +5,7 @@ import java.util.UUID
 
 interface GameSessionService {
 
-    fun finishGame(request: GameResultRequest): GameResultResponse
+    fun finishGame(userId: UUID, request: GameResultRequest): GameResultResponse
 
     fun getCurrentCoins(userId: UUID): PlayerCoinsResponse
 
@@ -21,6 +21,7 @@ interface GameSessionService {
     ): PlayerProgressResponse
 
     fun updatePlayerProgress(
+        userId: UUID,
         request: PlayerProgressRequest
     ): PlayerProgressResponse
 }

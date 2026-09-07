@@ -2,9 +2,10 @@ package com.mathenautics.backend.application.controller
 
 import com.mathenautics.backend.application.service.GameSessionService
 import com.mathenautics.backend.dto.*
+import com.mathenautics.backend.security.AuthenticatedUser
 import org.springframework.http.ResponseEntity
+import org.springframework.security.core.Authentication
 import org.springframework.web.bind.annotation.*
-import java.util.UUID
 
 @RestController
 @RequestMapping("/api/v1/games")
@@ -14,17 +15,18 @@ class GameController(
 
     @PostMapping("/finish")
     fun finishGame(
-        @RequestBody request: GameResultRequest
+        @RequestBody request: GameResultRequest,
+        authentication: Authentication
     ): ResponseEntity<GameResultResponse> {
-        val response = gameService.finishGame(request)
+        val authenticatedUser = authentication.principal as AuthenticatedUser
+        val response = gameService.finishGame(authenticatedUser.userId, request)
         return ResponseEntity.ok(response)
     }
 
     @GetMapping("/player/coins")
-    fun getPlayerCoins(
-        @RequestParam userId: UUID
-    ): ResponseEntity<PlayerCoinsResponse> {
-        val response = gameService.getCurrentCoins(userId)
+    fun getPlayerCoins(authentication: Authentication): ResponseEntity<PlayerCoinsResponse> {
+        val authenticatedUser = authentication.principal as AuthenticatedUser
+        val response = gameService.getCurrentCoins(authenticatedUser.userId)
         return ResponseEntity.ok(response)
     }
 
@@ -40,18 +42,21 @@ class GameController(
 
     @GetMapping("/progress")
     fun getProgress(
-        @RequestParam userId: UUID,
-        @RequestParam gameMode: String
+        @RequestParam gameMode: String,
+        authentication: Authentication
     ): ResponseEntity<PlayerProgressResponse> {
-        val progress = gameService.getPlayerProgress(userId, gameMode)
+        val authenticatedUser = authentication.principal as AuthenticatedUser
+        val progress = gameService.getPlayerProgress(authenticatedUser.userId, gameMode)
         return ResponseEntity.ok(progress)
     }
 
     @PostMapping("/progress")
     fun updateProgress(
-        @RequestBody request: PlayerProgressRequest
+        @RequestBody request: PlayerProgressRequest,
+        authentication: Authentication
     ): ResponseEntity<PlayerProgressResponse> {
-        val updated = gameService.updatePlayerProgress(request)
+        val authenticatedUser = authentication.principal as AuthenticatedUser
+        val updated = gameService.updatePlayerProgress(authenticatedUser.userId, request)
         return ResponseEntity.ok(updated)
     }
 }
