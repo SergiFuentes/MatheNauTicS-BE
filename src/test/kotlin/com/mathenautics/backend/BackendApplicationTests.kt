@@ -1,13 +1,11 @@
 package com.mathenautics.backend
 
+import com.mathenautics.backend.integration.IntegrationTestBase
 import org.junit.jupiter.api.Test
-import org.springframework.boot.test.context.SpringBootTest
 
-@SpringBootTest
-class BackendApplicationTests {
+class BackendApplicationTests : IntegrationTestBase() {
 
 	@Test
 	fun contextLoads() {
 	}
-
 }
