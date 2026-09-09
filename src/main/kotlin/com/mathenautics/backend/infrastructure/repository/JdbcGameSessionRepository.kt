@@ -35,7 +35,7 @@ class JdbcGameSessionRepository(
             .addValue("userId", userId)
             .addValue("gameMode", gameMode)
             .addValue("score", score)
-            .addValue("totalCoins", newTotal)
+            .addValue("totalCoins", coinsEarned)
             .addValue("durationSeconds", durationSeconds)
 
         val sessionId = jdbcTemplate.queryForObject(insertSql, params) { rs, _ ->
@@ -50,21 +50,13 @@ class JdbcGameSessionRepository(
 
     override fun getCurrentCoins(userId: UUID): Int {
         val sql = """
-            SELECT total_coins
-            FROM game_sessions
-            WHERE user_id = :userId
-            ORDER BY created_at DESC
-            LIMIT 1
-        """
+        SELECT COALESCE(SUM(total_coins), 0)
+        FROM game_sessions
+        WHERE user_id = :userId
+    """
         val params = MapSqlParameterSource().addValue("userId", userId)
 
-        return try {
-            jdbcTemplate.queryForObject(sql, params) { rs, _ ->
-                rs.getInt("total_coins")
-            } ?: 0
-        } catch (e: EmptyResultDataAccessException) {
-            0
-        }
+        return jdbcTemplate.queryForObject(sql, params, Int::class.java) ?: 0
     }
 
     override fun getLeaderboard(limit: Int, offset: Int, gameMode: String?): List<LeaderboardEntry> {

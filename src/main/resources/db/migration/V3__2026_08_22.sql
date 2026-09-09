@@ -1,4 +1,11 @@
-CREATE OR REPLACE VIEW leaderboard AS
+-- ============================================================
+-- V3__2026_08_22.sql
+-- Update leaderboard to include game mode and exclude guests
+-- ============================================================
+
+DROP VIEW IF EXISTS leaderboard;
+
+CREATE VIEW leaderboard AS
 SELECT
     u.username,
     gs.game_mode,

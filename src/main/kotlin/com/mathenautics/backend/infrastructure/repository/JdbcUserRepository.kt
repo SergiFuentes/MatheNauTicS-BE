@@ -94,14 +94,17 @@ class JdbcUserRepository(
         passwordHash?.let { updates += "password_hash = :passwordHash"; params.addValue("passwordHash", it) }
         isGuest?.let { updates += "is_guest = :isGuest"; params.addValue("isGuest", it) }
 
-        require(updates.isNotEmpty()) { "At least one field to update is required" }
+        if (updates.isEmpty()) {
+            return findById(userId)
+                ?: throw IllegalArgumentException("User not found")
+        }
 
         val sql = """
-            UPDATE users
-            SET ${updates.joinToString(", ")}
-            WHERE id = :userId
-            RETURNING id, username, email, created_at, is_guest
-        """
+        UPDATE users
+        SET ${updates.joinToString(", ")}
+        WHERE id = :userId
+        RETURNING id, username, email, created_at, is_guest
+    """
 
         return jdbcTemplate.query(sql, params) { rs, _ -> mapUser(rs) }
             .singleOrNull()

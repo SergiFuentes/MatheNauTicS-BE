@@ -3,10 +3,15 @@ package com.mathenautics.backend.security
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.http.HttpMethod
+import org.springframework.http.HttpStatus
 import org.springframework.security.config.annotation.web.builders.HttpSecurity
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity
 import org.springframework.security.config.http.SessionCreationPolicy
+import org.springframework.security.core.userdetails.UserDetailsService
+import org.springframework.security.core.userdetails.UsernameNotFoundException
 import org.springframework.security.web.SecurityFilterChain
+import org.springframework.security.web.access.AccessDeniedHandler
+import org.springframework.security.web.authentication.HttpStatusEntryPoint
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter
 import org.springframework.web.cors.CorsConfiguration
 import org.springframework.web.cors.CorsConfigurationSource
@@ -26,13 +31,23 @@ class SecurityConfig(
             .sessionManagement {
                 it.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
             }
+            .exceptionHandling {
+                it
+                    .authenticationEntryPoint(
+                        HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)
+                    )
+                    .accessDeniedHandler { _, response, _ ->
+                        response.sendError(HttpStatus.FORBIDDEN.value())
+                    }
+            }
             .authorizeHttpRequests { auth ->
                 auth
                     .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                     .requestMatchers(
                         "/api/v1/auth/login",
                         "/api/v1/users",
-                        "/api/v1/users/*/convert"
+                        "/api/v1/users/*/convert",
+                        "/api/v1/games/leaderboard"
                     ).permitAll()
                     .anyRequest().authenticated()
             }
@@ -60,8 +75,21 @@ class SecurityConfig(
             allowCredentials = true
             maxAge = 3600L
         }
+
         val source = UrlBasedCorsConfigurationSource()
         source.registerCorsConfiguration("/**", configuration)
         return source
+    }
+
+    /**
+     * Dummy UserDetailsService to prevent Spring Boot from auto-configuring
+     * an InMemoryUserDetailsManager and generating a default password.
+     * Authentication is handled exclusively via JWT filter.
+     */
+    @Bean
+    fun userDetailsService(): UserDetailsService {
+        return UserDetailsService { _ ->
+            throw UsernameNotFoundException("Authentication via JWT only")
+        }
     }
 }
