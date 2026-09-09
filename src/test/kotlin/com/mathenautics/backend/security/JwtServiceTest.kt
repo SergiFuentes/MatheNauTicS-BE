@@ -12,7 +12,7 @@ class JwtServiceTest {
     private lateinit var jwtService: JwtService
 
     // Valid 64-character secret for HS256
-    private val secret = "404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970"
+    private val secret = "test-secret-for-jwt-tests-only-1234567890abcdef"
     private val expirationMs = 3600000L // 1 hour
 
     @BeforeEach
