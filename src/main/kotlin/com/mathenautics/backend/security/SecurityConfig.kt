@@ -82,9 +82,10 @@ class SecurityConfig(
     }
 
     /**
-     * Dummy UserDetailsService to prevent Spring Boot from auto-configuring
-     * an InMemoryUserDetailsManager and generating a default password.
-     * Authentication is handled exclusively via JWT filter.
+     * Provides a custom UserDetailsService to prevent Spring Boot from auto-configuring
+     * an InMemoryUserDetailsManager and generating a default development password.
+     *
+     * Authentication is performed by the application's JWT-based security filter.
      */
     @Bean
     fun userDetailsService(): UserDetailsService {
