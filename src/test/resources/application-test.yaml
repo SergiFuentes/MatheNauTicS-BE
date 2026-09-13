@@ -1,0 +1,4 @@
+# Test-only configuration. Overrides properties that require env vars
+# (which CI and local test runs intentionally don't provide).
+jwt:
+  secret: test-secret-for-integration-tests-only-at-least-32-bytes-long
