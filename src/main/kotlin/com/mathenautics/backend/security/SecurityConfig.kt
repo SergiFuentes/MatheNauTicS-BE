@@ -1,5 +1,6 @@
 package com.mathenautics.backend.security
 
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.http.HttpMethod
@@ -10,7 +11,6 @@ import org.springframework.security.config.http.SessionCreationPolicy
 import org.springframework.security.core.userdetails.UserDetailsService
 import org.springframework.security.core.userdetails.UsernameNotFoundException
 import org.springframework.security.web.SecurityFilterChain
-import org.springframework.security.web.access.AccessDeniedHandler
 import org.springframework.security.web.authentication.HttpStatusEntryPoint
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter
 import org.springframework.web.cors.CorsConfiguration
@@ -20,7 +20,8 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource
 @Configuration
 @EnableWebSecurity
 class SecurityConfig(
-    private val jwtAuthenticationFilter: JwtAuthenticationFilter
+    private val jwtAuthenticationFilter: JwtAuthenticationFilter,
+    @Value("\${cors.allowed-origins}") private val corsAllowedOrigins: String
 ) {
 
     @Bean
@@ -44,6 +45,8 @@ class SecurityConfig(
                 auth
                     .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                     .requestMatchers(
+                        "/",
+                        "/health",
                         "/api/v1/auth/login",
                         "/api/v1/users",
                         "/api/v1/users/*/convert",
@@ -59,17 +62,13 @@ class SecurityConfig(
 
     @Bean
     fun corsConfigurationSource(): CorsConfigurationSource {
+        val origins = corsAllowedOrigins
+            .split(",")
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+
         val configuration = CorsConfiguration().apply {
-            allowedOrigins = listOf(
-                "http://localhost:5500",
-                "http://127.0.0.1:5500",
-                "http://192.168.1.49:5500",
-                "http://192.168.0.16:5500",
-                "http://localhost:3000",
-                "http://127.0.0.1:3000",
-                "http://172.21.224.1:5500",
-                "http://192.168.61.55:5500"
-            )
+            allowedOrigins = origins
             allowedMethods = listOf("GET", "POST", "PUT", "DELETE", "OPTIONS")
             allowedHeaders = listOf("*")
             allowCredentials = true
