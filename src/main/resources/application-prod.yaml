@@ -1,3 +1,10 @@
+spring:
+  datasource:
+    hikari:
+      maximum-pool-size: 3
+      minimum-idle: 1
+      connection-timeout: 10000
+
 logging:
   level:
     root: WARN
