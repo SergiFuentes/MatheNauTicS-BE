@@ -30,14 +30,13 @@ class JwtAuthenticationFilter(
             filterChain.doFilter(request, response)
             return
         }
+
         val token = extractToken(request)
-        logger.info("Token extraído: $token")
 
         if (token != null && jwtService.isTokenValid(token)) {
             val userId = jwtService.extractUserId(token)
             val username = jwtService.extractUsername(token)
             val isGuest = jwtService.extractIsGuest(token)
-            logger.info("Usuario autenticado: $username, userId: $userId, isGuest: $isGuest")
 
             val authorities = listOf(
                 SimpleGrantedAuthority(if (isGuest) "ROLE_GUEST" else "ROLE_USER")
@@ -50,9 +49,8 @@ class JwtAuthenticationFilter(
             )
 
             SecurityContextHolder.getContext().authentication = authentication
-            logger.info("Autenticación establecida: ${SecurityContextHolder.getContext().authentication}")
-        } else {
-            logger.warn("Token no válido o ausente")
+
+            logger.debug("Authenticated request for userId=$userId")
         }
 
         filterChain.doFilter(request, response)
