@@ -6,6 +6,8 @@ The backend provides persistent user accounts, guest users, JWT-based authentica
 
 It is built with **Kotlin**, **Spring Boot**, and **PostgreSQL**, using **Spring JDBC and pure SQL** instead of an ORM.
 
+> Deployment (Render, Supabase connectivity, HikariCP, UptimeRobot keepalive) is documented in [DEPLOYMENT.md](DEPLOYMENT.md).
+
 ---
 
 ## Table of Contents
