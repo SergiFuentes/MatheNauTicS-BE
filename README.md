@@ -2,7 +2,7 @@
 
 Backend REST API for **MatheNauTicS**, an educational mathematics game built with Phaser 3.
 
-The backend provides persistent user accounts, guest users, game sessions, player progression, leaderboards, and account management functionality.
+The backend provides persistent user accounts, guest users, JWT-based authentication, game sessions, player progression, leaderboards, and account management functionality.
 
 It is built with **Kotlin**, **Spring Boot**, and **PostgreSQL**, using **Spring JDBC and pure SQL** instead of an ORM.
 
@@ -21,8 +21,10 @@ It is built with **Kotlin**, **Spring Boot**, and **PostgreSQL**, using **Spring
 * [Configuration](#configuration)
 * [Running the Application](#running-the-application)
 * [API](#api)
+* [Authentication](#authentication)
 * [CORS](#cors)
 * [Security](#security)
+* [Connection Pool](#connection-pool)
 * [Testing](#testing)
 * [Frontend Integration](#frontend-integration)
 * [Dependencies](#dependencies)
@@ -45,6 +47,7 @@ The backend is responsible for:
 * User account management
 * Guest player management
 * Guest-to-registered user conversion
+* JWT-based authentication
 * Game session persistence
 * Coin persistence
 * Player progression
@@ -57,36 +60,38 @@ The frontend is a Phaser 3 web application that communicates with this backend t
 ### Architecture
 
 ```text
-┌──────────────────────────────┐
-│       Phaser 3 Frontend      │
-│                              │
-│  Game / UI / User Interface  │
-└──────────────┬───────────────┘
-               │
-               │ REST / JSON
-               ▼
-┌──────────────────────────────┐
-│      Spring Boot Backend     │
-│                              │
-│ Controllers                  │
-│      ↓                       │
-│ Services                     │
-│      ↓                       │
-│ Repositories                 │
-│      ↓                       │
-│ Spring JDBC / SQL            │
-└──────────────┬───────────────┘
-               │
-               │ JDBC
-               ▼
-┌──────────────────────────────┐
-│      PostgreSQL / Supabase   │
-│                              │
-│ users                        │
-│ game_sessions                │
-│ player_progress              │
-│ leaderboard                  │
-└──────────────────────────────┘
+┌────────────────────────────────┐
+│       Phaser 3 Frontend        │
+│                                │
+│  Game / UI / User Interface    │
+└────────────────┬───────────────┘
+                 │
+                 │ REST / JSON + JWT
+                 ▼
+┌────────────────────────────────┐
+│      Spring Boot Backend       │
+│                                │
+│  Controllers                   │
+│       ↓                        │
+│  Security Filter (JWT)         │
+│       ↓                        │
+│  Services                      │
+│       ↓                        │
+│  Repositories                  │
+│       ↓                        │
+│  Spring JDBC / SQL             │
+└────────────────┬───────────────┘
+                 │
+                 │ JDBC
+                 ▼
+┌────────────────────────────────┐
+│      PostgreSQL / Supabase     │
+│                                │
+│  users                         │
+│  game_sessions                 │
+│  player_progress               │
+│  leaderboard (view)            │
+└────────────────────────────────┘
 ```
 
 ---
@@ -129,7 +134,51 @@ Guest users:
 
 The registration flow allows an existing guest player to create an account while preserving their existing game data.
 
+The conversion endpoint is `POST /api/v1/users/me/convert` and is called with the guest's JWT. The target user is derived from the authenticated token, not from the request body.
+
 This means that registering does not require starting the game again from scratch.
+
+---
+
+## Authentication
+
+Authentication is JWT-based.
+
+Clients obtain a token by sending credentials to the login endpoint. Subsequent requests to protected endpoints include the token in the `Authorization` header.
+
+Login endpoint:
+
+```http
+POST /api/v1/auth/login
+Content-Type: application/json
+
+{
+  "identifier": "<username or email>",
+  "password": "<password>"
+}
+```
+
+The response contains a JWT and basic user information:
+
+```json
+{
+  "userId": "<uuid>",
+  "username": "<username>",
+  "email": "<email>",
+  "isGuest": false,
+  "token": "<jwt>"
+}
+```
+
+Subsequent requests send the token as:
+
+```http
+Authorization: Bearer <jwt>
+```
+
+Tokens are signed with **HS256** using the `JWT_SECRET` environment variable (≥ 32 bytes). Expiration is 24 hours (86400000 ms), configured via `jwt.expiration` in `application.yaml`.
+
+There is no refresh-token flow: once expired, the client must log in again. Logout is client-side only (the frontend discards the token).
 
 ---
 
@@ -164,12 +213,15 @@ Depending on the game mode, the backend stores:
 ### Adventure Mode
 
 * Current level
+* Score, lives, coins, difficulty (full runner state)
 
 ### Training Mode
 
 * Current multiplication table
 
 Progress is updated when the player advances through the corresponding game content.
+
+Progress is keyed by `(user_id, game_mode)`.
 
 ---
 
@@ -188,7 +240,7 @@ Guest players are excluded from leaderboard results.
 
 Example:
 
-```text
+```http
 GET /api/v1/games/leaderboard?limit=10&offset=0&gameMode=adventure
 ```
 
@@ -196,17 +248,21 @@ GET /api/v1/games/leaderboard?limit=10&offset=0&gameMode=adventure
 
 # Technology Stack
 
-| Technology  | Version             | Purpose               |
-| ----------- | ------------------- | --------------------- |
-| Kotlin      | 2.0.21              | Backend language      |
-| Spring Boot | 3.4.3               | Application framework |
-| Spring JDBC | Spring Boot managed | Database access       |
-| PostgreSQL  | 42.7.x JDBC driver  | Database              |
-| Supabase    | Managed PostgreSQL  | Cloud database        |
-| Flyway      | 10.21.0             | Database migrations   |
-| BCrypt      | 0.4                 | Password hashing      |
-| Gradle      | Kotlin DSL          | Build system          |
-| JUnit 5     | Spring Boot managed | Testing               |
+| Technology      | Version             | Purpose                |
+| --------------- | ------------------- | ---------------------- |
+| Kotlin          | 2.0.21              | Backend language       |
+| Spring Boot     | 3.4.3               | Application framework  |
+| Spring JDBC     | Spring Boot managed | Database access        |
+| Spring Security | Spring Boot managed | Authentication / JWT   |
+| JJWT            | 0.12.6              | JWT signing & parsing  |
+| PostgreSQL      | 42.7.x JDBC driver  | Database driver        |
+| Supabase        | Managed PostgreSQL  | Cloud database         |
+| Flyway          | 10.21.0             | Database migrations    |
+| BCrypt          | 0.4                 | Password hashing       |
+| Gradle          | Kotlin DSL          | Build system           |
+| JUnit 5         | Spring Boot managed | Testing                |
+| MockK           | 1.13.13             | Kotlin mocking         |
+| Testcontainers  | 1.21.4              | Integration testing    |
 
 ---
 
@@ -231,62 +287,81 @@ java -version
 
 # Project Structure
 
-The project follows a layered architecture with a separation between application, domain, and infrastructure concerns.
+The project follows a layered architecture with a separation between application, domain, infrastructure, and security concerns.
 
 ```text
 src/
 ├── main/
-│   ├── kotlin/
-│   │   └── ...
-│   │       ├── application/
-│   │       │   ├── controller/
-│   │       │   └── service/
-│   │       │
-│   │       ├── domain/
-│   │       │   └── repository/
-│   │       │
-│   │       ├── infrastructure/
-│   │       │   └── repository/
-│   │       │
-│   │       ├── dto/
-│   │       │
-│   │       └── config/
+│   ├── kotlin/com/mathenautics/backend/
+│   │   ├── BackendApplication.kt
+│   │   ├── application/
+│   │   │   ├── controller/
+│   │   │   ├── service/
+│   │   │   │   └── impl/
+│   │   │   └── exception/
+│   │   ├── domain/
+│   │   │   ├── model/
+│   │   │   └── repository/
+│   │   ├── infrastructure/
+│   │   │   └── repository/
+│   │   ├── dto/
+│   │   ├── security/
+│   │   └── util/
 │   │
 │   └── resources/
 │       ├── application.yaml
-│       └── db/
-│           └── migration/
-│               └── V1__initial_schema.sql
+│       ├── application-prod.yaml
+│       └── db/migration/
+│           ├── V1__initial_schema.sql
+│           ├── V2__2026_08_22.sql
+│           ├── V3__2026_08_22.sql
+│           ├── V4__2026_08_28.sql
+│           ├── V5__2026_09_02.sql
+│           ├── V6__2026_09_02.sql
+│           ├── V7__2026_09_02.sql
+│           ├── V8__2026__09_03.sql
+│           └── V9__2026_09_04.sql
 │
-└── test/
-    └── kotlin/
+└── test/kotlin/
 ```
 
 ### Main Layers
 
 #### `application/controller`
 
-Contains REST controllers and exposes the HTTP API.
+REST controllers exposing the HTTP API.
 
 #### `application/service`
 
-Contains business logic and application use cases.
+Business logic and application use cases. Interfaces live here; implementations under `service/impl`.
+
+#### `application/exception`
+
+Domain exceptions and the global exception handler.
+
+#### `domain/model`
+
+Domain models such as `User` and `UserCredentials`.
 
 #### `domain/repository`
 
-Contains repository interfaces defining the persistence contracts.
+Repository interfaces defining persistence contracts.
 
 #### `infrastructure/repository`
 
-Contains the concrete JDBC implementations.
+Concrete JDBC implementations built on `NamedParameterJdbcTemplate`.
 
 #### `dto`
 
-Contains request and response data transfer objects.
+Request and response data transfer objects.
 
-#### `config`
+#### `security`
 
-Contains application configuration such as database, CORS, and other Spring configuration.
+JWT service, JWT filter, and Spring Security configuration.
+
+#### `util`
+
+Small shared utilities (e.g. `OffsetDateTime` extensions).
 
 ---
 
@@ -319,7 +394,7 @@ This provides explicit control over:
 
 # Database Schema
 
-The current schema contains the following tables and views.
+The current schema (Flyway version 9) contains the following tables and views.
 
 ## `users`
 
@@ -327,13 +402,15 @@ Stores player accounts.
 
 ```text
 users
-├── id
-├── username
-├── email
-├── password_hash
-├── is_guest
-└── created_at
+├── id              UUID PK, default gen_random_uuid()
+├── username        VARCHAR(50) UNIQUE NOT NULL
+├── email           VARCHAR(255) UNIQUE NOT NULL
+├── password_hash   VARCHAR(255) NOT NULL
+├── created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+└── is_guest        BOOLEAN NOT NULL DEFAULT TRUE
 ```
+
+Indexes on `LOWER(username)`, `LOWER(email)`, and `is_guest` support case-insensitive lookups and guest filtering.
 
 ## `game_sessions`
 
@@ -341,31 +418,47 @@ Stores completed game sessions.
 
 ```text
 game_sessions
-├── id
-├── user_id
-├── game_mode
-├── score
-├── total_coins
-├── duration_seconds
-└── created_at
+├── id                BIGSERIAL PK
+├── user_id           UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE
+├── game_mode         VARCHAR(20) NOT NULL  CHECK IN ('adventure','training')
+├── score             INTEGER NOT NULL      CHECK >= 0
+├── total_coins       INTEGER NOT NULL      CHECK >= 0
+├── duration_seconds  INTEGER NOT NULL      CHECK >= 0
+└── created_at        TIMESTAMPTZ NOT NULL DEFAULT now()
 ```
+
+Indexed on `user_id`, `score DESC`, and `game_mode`.
 
 ## `player_progress`
 
-Stores persistent player progression.
+Stores persistent player progression, keyed by `(user_id, game_mode)`.
 
 ```text
 player_progress
-├── user_id
-├── game_mode
-├── current_level
-├── current_table
-└── last_played_at
+├── user_id         UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE
+├── game_mode       VARCHAR(20) NOT NULL  CHECK IN ('adventure','training')
+├── current_level   INTEGER NOT NULL DEFAULT 1  CHECK >= 1
+├── current_table   INTEGER DEFAULT 1
+├── last_played_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+├── score           INTEGER NOT NULL DEFAULT 0
+├── lives           INTEGER NOT NULL DEFAULT 3
+├── coins           INTEGER NOT NULL DEFAULT 0
+└── difficulty      VARCHAR(20) NOT NULL DEFAULT 'normal'
+
+PRIMARY KEY (user_id, game_mode)
 ```
 
-## `leaderboard`
+## `leaderboard` (view)
 
-Database view used to generate leaderboard results.
+Read-only view used to generate leaderboard results.
+
+```sql
+SELECT u.username, gs.game_mode, gs.score, gs.total_coins, gs.created_at
+FROM game_sessions gs
+JOIN users u ON gs.user_id = u.id
+WHERE u.is_guest = FALSE
+ORDER BY gs.score DESC
+```
 
 Guest users are excluded from the leaderboard.
 
@@ -381,11 +474,21 @@ Migration files are located under:
 src/main/resources/db/migration/
 ```
 
-Current migration:
+Current production schema version: **9**.
 
-```text
-V1__initial_schema.sql
-```
+Migration history (abbreviated):
+
+| Version | Purpose                                                     |
+| ------- | ----------------------------------------------------------- |
+| V1      | Initial schema: users, game_sessions, player_progress, view |
+| V2      | Add `is_guest` to users                                     |
+| V3      | Leaderboard excludes guests; add game_mode to view          |
+| V4      | Enforce `is_guest NOT NULL`; add lower-case indexes         |
+| V5      | Add unique `(user_id, game_mode)` on player_progress        |
+| V6      | Ensure `game_mode` exists and is NOT NULL                   |
+| V7      | Constrain `game_mode IN ('adventure','training')`           |
+| V8      | Add `score`, `lives`, `coins`, `difficulty` to progress     |
+| V9      | Composite primary key `(user_id, game_mode)`                |
 
 Flyway automatically applies pending migrations when the application starts.
 
@@ -393,37 +496,68 @@ Flyway automatically applies pending migrations when the application starts.
 
 # Configuration
 
-Application configuration is located in:
+Application configuration is split into:
 
-```text
-src/main/resources/application.yaml
-```
+* `application.yaml` — shared, default configuration.
+* `application-prod.yaml` — production overrides (activated by `SPRING_PROFILES_ACTIVE=prod`).
 
-Database credentials should not be committed to the repository.
-
-Use environment variables for sensitive configuration.
+Database credentials and secrets are never committed to the repository. They are supplied exclusively through environment variables.
 
 ## Environment Variables
 
-The backend currently requires:
+| Variable               | Required | Purpose                                                 |
+| ---------------------- | -------- | ------------------------------------------------------- |
+| `DB_URL`               | yes      | JDBC URL (`jdbc:postgresql://host:5432/db`)             |
+| `DB_USERNAME`          | yes      | Database user                                           |
+| `DB_PASSWORD`          | yes      | Database password                                       |
+| `JWT_SECRET`           | yes      | JWT signing secret (HS256, ≥ 32 bytes)                  |
+| `CORS_ALLOWED_ORIGINS` | prod     | Comma-separated list of allowed frontend origins        |
+| `PORT`                 | prod     | HTTP port; injected by Render. Defaults to `8080`       |
+| `SPRING_PROFILES_ACTIVE` | prod   | Set to `prod` on Render                                 |
 
-```env
-DB_PASSWORD=<Supabase database password>
-```
-
-The database URL, username, and other configuration values are defined in `application.yaml`.
-
-### Example
+### Relevant defaults in `application.yaml`
 
 ```yaml
 spring:
   datasource:
-    url: jdbc:postgresql://<host>:5432/<database>
-    username: <username>
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
+
+server:
+  port: ${PORT:8080}
+
+jwt:
+  secret: ${JWT_SECRET}
+  expiration: 86400000   # 24 hours in milliseconds
+
+cors:
+  allowed-origins: http://localhost:5500,http://127.0.0.1:5500,...
 ```
 
-> Never commit real database passwords, API keys, tokens, or other secrets to Git.
+### Production overrides in `application-prod.yaml`
+
+```yaml
+spring:
+  datasource:
+    hikari:
+      maximum-pool-size: 3
+      minimum-idle: 1
+      connection-timeout: 10000
+
+logging:
+  level:
+    root: WARN
+    com.mathenautics: INFO
+    org.springframework.web: WARN
+    org.springframework.security: WARN
+    org.flywaydb: INFO
+
+cors:
+  allowed-origins: ${CORS_ALLOWED_ORIGINS}
+```
+
+> Never commit real database passwords, JWT secrets, API keys, tokens, or other secrets to Git.
 
 ---
 
@@ -438,18 +572,24 @@ cd <repository-directory>
 
 ## Configure Environment Variables
 
-Set the database password before starting the application.
+Set the required environment variables before starting the application.
 
 ### Linux / macOS
 
 ```bash
-export DB_PASSWORD="your-password"
+export DB_URL="jdbc:postgresql://<host>:5432/<database>"
+export DB_USERNAME="<username>"
+export DB_PASSWORD="<password>"
+export JWT_SECRET="<at-least-32-bytes-secret>"
 ```
 
 ### Windows PowerShell
 
 ```powershell
-$env:DB_PASSWORD="your-password"
+$env:DB_URL="jdbc:postgresql://<host>:5432/<database>"
+$env:DB_USERNAME="<username>"
+$env:DB_PASSWORD="<password>"
+$env:JWT_SECRET="<at-least-32-bytes-secret>"
 ```
 
 ## Build the Project
@@ -474,45 +614,87 @@ http://localhost:8080
 
 # API
 
-The API is versioned under:
+The API is versioned under `/api/v1`, except `/health` and `/` which are top-level.
 
-```text
-/api/v1
+## Authentication
+
+### Login
+
+```http
+POST /api/v1/auth/login
+Content-Type: application/json
+
+{
+  "identifier": "<username or email>",
+  "password": "<password>"
+}
 ```
 
+Returns `200 OK` with:
+
+```json
+{
+  "userId": "<uuid>",
+  "username": "<username>",
+  "email": "<email>",
+  "isGuest": false,
+  "token": "<jwt>"
+}
+```
+
+Invalid credentials return `401 Unauthorized`.
+
+---
+
 ## Users
+
+All user-scoped endpoints operate on the **authenticated user**, derived from the JWT. There is no `userId` path parameter.
 
 ### Create User
 
 ```http
 POST /api/v1/users
+Content-Type: application/json
 ```
 
-Creates a guest or registered user.
+Public endpoint. Used to create both guest and registered users.
 
-### Get User
+### Get Current User
 
 ```http
-GET /api/v1/users/{userId}
+GET /api/v1/users/me
+Authorization: Bearer <jwt>
 ```
 
-Returns the requested user's information.
+Returns the authenticated user's information.
 
-### Update User
+### Update Current User
 
 ```http
-PUT /api/v1/users/{userId}
+PUT /api/v1/users/me
+Authorization: Bearer <jwt>
 ```
 
-Updates user information.
+Updates the authenticated user's information.
 
-### Delete User
+### Convert Guest to Registered
 
 ```http
-DELETE /api/v1/users/{userId}
+POST /api/v1/users/me/convert
+Authorization: Bearer <guest-jwt>
+Content-Type: application/json
 ```
 
-Deletes the user and associated data according to the configured database constraints.
+Converts the authenticated guest into a registered user, preserving game data.
+
+### Delete Current User
+
+```http
+DELETE /api/v1/users/me
+Authorization: Bearer <jwt>
+```
+
+Deletes the authenticated user and associated data (via cascade).
 
 ---
 
@@ -522,17 +704,20 @@ Deletes the user and associated data according to the configured database constr
 
 ```http
 POST /api/v1/games/finish
+Authorization: Bearer <jwt>
+Content-Type: application/json
 ```
 
-Stores a completed game session.
+Stores a completed game session for the authenticated user.
 
 ### Get Player Coins
 
 ```http
-GET /api/v1/games/player/coins?userId={userId}
+GET /api/v1/games/player/coins
+Authorization: Bearer <jwt>
 ```
 
-Returns the player's current accumulated coins.
+Returns the authenticated player's accumulated coins.
 
 ### Get Leaderboard
 
@@ -540,12 +725,14 @@ Returns the player's current accumulated coins.
 GET /api/v1/games/leaderboard
 ```
 
-Optional parameters:
+Public endpoint.
+
+Optional query parameters:
 
 ```text
-limit
-offset
-gameMode
+limit    (default 10)
+offset   (default 0)
+gameMode (optional, "adventure" | "training")
 ```
 
 Example:
@@ -561,30 +748,52 @@ GET /api/v1/games/leaderboard?limit=10&offset=0&gameMode=training
 ### Get Progress
 
 ```http
-GET /api/v1/games/progress?userId={userId}
+GET /api/v1/games/progress?gameMode=adventure
+Authorization: Bearer <jwt>
 ```
 
-Returns the player's current progression.
+Returns the authenticated player's progress for the given game mode.
 
 ### Update Progress
 
 ```http
 POST /api/v1/games/progress
+Authorization: Bearer <jwt>
+Content-Type: application/json
 ```
 
-Updates the player's level and/or multiplication table depending on the selected game mode.
+Creates or updates the authenticated player's progress for the given game mode.
+
+Progress is keyed by `(user_id, game_mode)`, so this endpoint is idempotent per mode.
 
 ---
 
 ## Health Check
 
-The backend exposes a health endpoint:
-
 ```http
 GET /health
 ```
 
-This endpoint can be used to verify that the API and database connection are working correctly.
+Public endpoint. Used by Render's health check and by the external keepalive monitor.
+
+It performs a lightweight `SELECT 1` against the database and returns:
+
+```json
+{
+  "status": "UP",
+  "database": "connected"
+}
+```
+
+Or, if the database is unreachable:
+
+```json
+{
+  "status": "DOWN",
+  "database": "disconnected",
+  "error": "<message>"
+}
+```
 
 Example:
 
@@ -592,22 +801,94 @@ Example:
 curl http://localhost:8080/health
 ```
 
+### Root
+
+```http
+GET /
+```
+
+Returns a simple text banner. Useful as a sanity check.
+
+---
+
+# Authentication
+
+Authentication is JWT-based and enforced by Spring Security.
+
+## Public endpoints
+
+The following paths are `permitAll()` in `SecurityConfig`:
+
+* `OPTIONS /**` (CORS preflight)
+* `GET /`
+* `GET /health`
+* `POST /api/v1/auth/login`
+* `POST /api/v1/users`
+* `POST /api/v1/users/*/convert`
+* `GET /api/v1/games/leaderboard`
+
+Everything else requires a valid JWT.
+
+## Protected endpoints
+
+Any request to a non-public path must include:
+
+```http
+Authorization: Bearer <jwt>
+```
+
+If the token is missing or invalid, the backend responds with `401 Unauthorized` (via `HttpStatusEntryPoint`).
+
+## Token contents
+
+JWTs are signed with HS256 and contain:
+
+| Claim      | Value                                    |
+| ---------- | ---------------------------------------- |
+| `sub`      | User UUID                                |
+| `username` | Username                                 |
+| `isGuest`  | `"true"` / `"false"` (string)            |
+| `iat`      | Issued-at timestamp                      |
+| `exp`      | Expiration (issued-at + 24h)             |
+
+## Security filter
+
+`JwtAuthenticationFilter` runs once per request, extracts the `Bearer` token, validates it, and — if valid — populates the `SecurityContext` with an `AuthenticatedUser(userId, username, isGuest)` principal and a `ROLE_USER` or `ROLE_GUEST` authority.
+
+Controllers therefore never read a `userId` from the request body or query string. The authenticated identity is authoritative.
+
+There is no server-side logout endpoint: the client simply discards the JWT.
+
 ---
 
 # CORS
 
-CORS is currently configured for local frontend development.
+CORS is configured via `cors.allowed-origins`.
 
-Allowed origins include:
+## Development
+
+Defaults from `application.yaml` include local frontends:
 
 ```text
 http://localhost:5500
+http://127.0.0.1:5500
 http://192.168.1.49:5500
+http://192.168.0.16:5500
+http://localhost:3000
+http://127.0.0.1:3000
+http://172.21.224.1:5500
+http://192.168.61.55:5500
 ```
 
-This allows the Phaser development server to communicate with the Spring Boot API.
+## Production
 
-When deploying the application, the production frontend origin must be added to the CORS configuration.
+The production origin is supplied via the `CORS_ALLOWED_ORIGINS` environment variable and is restricted to:
+
+```text
+https://mathenautics.pages.dev
+```
+
+CORS is never configured with `*`. Development origins are not present in production.
 
 ---
 
@@ -629,7 +910,21 @@ password_hash
    Database
 ```
 
-Passwords are never stored in plain text.
+Passwords are never stored in plain text. BCrypt verification is used on login.
+
+## JWT Authentication
+
+Protected endpoints require a valid JWT. Tokens are validated by `JwtAuthenticationFilter` before the request reaches the controller.
+
+Tokens are signed with HS256 using `JWT_SECRET`, loaded from the environment.
+
+## Stateless Sessions
+
+`SessionCreationPolicy.STATELESS` is set. No HTTP session or cookie is used. CSRF is disabled accordingly.
+
+## Identity from Token, not from Client
+
+Controllers obtain the user identity from the `AuthenticatedUser` principal attached to the `Authentication` object. There is no `userId` parameter in the request body or query string for user-scoped operations. This eliminates a whole class of IDOR attacks by construction.
 
 ## Input Validation
 
@@ -639,27 +934,43 @@ Request DTOs are validated before reaching the business logic.
 
 The database uses constraints to protect data integrity, including:
 
-* Foreign keys
-* Cascade deletion
-* Non-negative score validation
-* Non-negative coin validation
-* User/game relationships
+* Foreign keys with cascade deletion
+* `CHECK` constraints on scores, coins, durations, and levels
+* Enforced `game_mode IN ('adventure','training')`
+* Unique `(user_id, game_mode)` in `player_progress`
 
 ## Guest Separation
 
-Guest users are identified using:
+Guest users are identified by `is_guest`. The leaderboard view filters them out.
 
-```text
-is_guest
+---
+
+# Connection Pool
+
+The backend uses HikariCP. In production, the pool is intentionally limited:
+
+```yaml
+spring:
+  datasource:
+    hikari:
+      maximum-pool-size: 3
+      minimum-idle: 1
+      connection-timeout: 10000
 ```
 
-This allows the application to distinguish temporary players from registered users.
+This value was determined from actual production constraints:
+
+* Supabase Session Pooler connection limits.
+* Render Free resource limits.
+* Actual API traffic concurrency.
+
+It is an operational configuration, not a theoretical default. Do not increase it without concrete evidence that the production environment can support it.
 
 ---
 
 # Testing
 
-The backend has been tested using both automated application tests and manual API testing.
+The backend has been tested using both automated tests and manual end-to-end API testing.
 
 ## Automated Tests
 
@@ -669,24 +980,45 @@ Run the test suite with:
 ./gradlew test
 ```
 
+Test stack includes:
+
+* JUnit 5
+* Spring Boot Test
+* Spring Security Test
+* MockK (`io.mockk:mockk:1.13.13`)
+* SpringMockK (`com.ninja-squad:springmockk:4.0.2`)
+* Testcontainers (`1.21.4`, PostgreSQL module)
+
+## CI
+
+Backend CI runs on GitHub Actions via:
+
+```text
+.github/workflows/backend-ci.yml
+```
+
+It uses Java 17 (Temurin), Gradle, and runs a clean build.
+
 ## Manual API Testing
 
-The REST API has also been tested using Postman.
+The REST API has been tested manually and end-to-end against production.
 
-The following endpoints have been verified:
+Verified endpoints:
 
-| Endpoint                     | Method | Status |
-| ---------------------------- | ------ | ------ |
-| `/api/v1/users`              | POST   | ✅      |
-| `/api/v1/users/{userId}`     | GET    | ✅      |
-| `/api/v1/users/{userId}`     | PUT    | ✅      |
-| `/api/v1/users/{userId}`     | DELETE | ✅      |
-| `/api/v1/games/finish`       | POST   | ✅      |
-| `/api/v1/games/player/coins` | GET    | ✅      |
-| `/api/v1/games/leaderboard`  | GET    | ✅      |
-| `/api/v1/games/progress`     | GET    | ✅      |
-| `/api/v1/games/progress`     | POST   | ✅      |
-| `/health`                    | GET    | ✅      |
+| Endpoint                              | Method | Status |
+| ------------------------------------- | ------ | ------ |
+| `/api/v1/users`                       | POST   | ✅      |
+| `/api/v1/users/me`                    | GET    | ✅      |
+| `/api/v1/users/me`                    | PUT    | ✅      |
+| `/api/v1/users/me`                    | DELETE | ✅      |
+| `/api/v1/users/me/convert`            | POST   | ✅      |
+| `/api/v1/auth/login`                  | POST   | ✅      |
+| `/api/v1/games/finish`                | POST   | ✅      |
+| `/api/v1/games/player/coins`          | GET    | ✅      |
+| `/api/v1/games/leaderboard`           | GET    | ✅      |
+| `/api/v1/games/progress`              | GET    | ✅      |
+| `/api/v1/games/progress`              | POST   | ✅      |
+| `/health`                             | GET    | ✅      |
 
 ## Edge Cases Tested
 
@@ -698,14 +1030,13 @@ The following endpoints have been verified:
 | Guest registration preserves existing game data | ✅      |
 | Invalid input validation                        | ✅      |
 | User CRUD operations                            | ✅      |
+| HTTP error handling with non-JSON bodies        | ✅      |
 
 ---
 
 # Frontend Integration
 
 The backend is designed to be consumed by the Phaser 3 frontend.
-
-The frontend communicates with the API using HTTP requests.
 
 Development configuration:
 
@@ -717,13 +1048,19 @@ Backend
 http://localhost:8080
 ```
 
-The frontend should use the API base URL:
+The frontend uses the API base URL:
 
 ```text
 http://localhost:8080/api/v1
 ```
 
-For production, this URL must be replaced with the deployed backend URL.
+In production this URL is provided by the frontend build-time configuration: Cloudflare Pages rewrites `config.js` with the value of `MATHENAUTICS_API_URL`, which points to:
+
+```text
+https://mathenautics-be.onrender.com/api/v1
+```
+
+The frontend stores the JWT returned by `/api/v1/auth/login` and sends it on protected requests as `Authorization: Bearer <jwt>`.
 
 ---
 
@@ -734,20 +1071,32 @@ For production, this URL must be replaced with the deployed backend URL.
 ```kotlin
 implementation("org.springframework.boot:spring-boot-starter-web")
 implementation("org.springframework.boot:spring-boot-starter-jdbc")
+implementation("org.springframework.boot:spring-boot-starter-security")
 implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
 implementation("org.jetbrains.kotlin:kotlin-reflect")
+implementation("org.jetbrains.kotlin:kotlin-stdlib")
 runtimeOnly("org.postgresql:postgresql")
 implementation("org.mindrot:jbcrypt:0.4")
 implementation("org.flywaydb:flyway-core:10.21.0")
 implementation("org.flywaydb:flyway-database-postgresql:10.21.0")
+implementation("io.jsonwebtoken:jjwt-api:0.12.6")
+runtimeOnly("io.jsonwebtoken:jjwt-impl:0.12.6")
+runtimeOnly("io.jsonwebtoken:jjwt-jackson:0.12.6")
 ```
 
 ## Test Dependencies
 
 ```kotlin
 testImplementation("org.springframework.boot:spring-boot-starter-test")
+testImplementation("org.springframework.security:spring-security-test")
 testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
 testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+testImplementation("io.mockk:mockk:1.13.13")
+testImplementation("com.ninja-squad:springmockk:4.0.2")
+testImplementation("org.testcontainers:testcontainers:1.21.4")
+testImplementation("org.testcontainers:postgresql:1.21.4")
+testImplementation("org.testcontainers:junit-jupiter:1.21.4")
+testImplementation("org.springframework.boot:spring-boot-testcontainers")
 ```
 
 ---
@@ -765,6 +1114,8 @@ plugins {
 }
 ```
 
+Java toolchain: **17**.
+
 ---
 
 # Development Workflow
@@ -774,7 +1125,7 @@ A typical development workflow is:
 ```text
 1. Start PostgreSQL / Supabase
            ↓
-2. Configure DB_PASSWORD
+2. Configure environment variables (DB_*, JWT_SECRET)
            ↓
 3. Start Spring Boot
            ↓
@@ -784,14 +1135,14 @@ A typical development workflow is:
            ↓
 6. Start Phaser frontend
            ↓
-7. Frontend communicates with /api/v1
+7. Frontend logs in, receives JWT, communicates with /api/v1
 ```
 
 ---
 
 # Current Status
 
-The backend currently provides the core persistence layer required by the game.
+The backend provides the core persistence and authentication layer required by the game.
 
 | Feature                           | Status     |
 | --------------------------------- | ---------- |
@@ -799,31 +1150,30 @@ The backend currently provides the core persistence layer required by the game.
 | Guest users                       | ✅ Complete |
 | Registered users                  | ✅ Complete |
 | Guest → Registered conversion     | ✅ Complete |
-| User CRUD                         | ✅ Complete |
-| Password hashing                  | ✅ Complete |
+| User CRUD (via `/me`)             | ✅ Complete |
+| Password hashing (BCrypt)         | ✅ Complete |
+| JWT authentication                | ✅ Complete |
+| Identity derived from JWT only    | ✅ Complete |
 | Game session persistence          | ✅ Complete |
 | Coin persistence                  | ✅ Complete |
 | Leaderboard                       | ✅ Complete |
 | Leaderboard pagination            | ✅ Complete |
 | Leaderboard game-mode filtering   | ✅ Complete |
 | Player progression                | ✅ Complete |
-| Audio settings                    | ✅ Complete |
 | Flyway migrations                 | ✅ Complete |
 | PostgreSQL / Supabase integration | ✅ Complete |
 | Input validation                  | ✅ Complete |
 | Error handling                    | ✅ Complete |
 | Health check                      | ✅ Complete |
 | CORS                              | ✅ Complete |
+| Production deployment (Render)    | ✅ Complete |
+| Backend CI (GitHub Actions)       | ✅ Complete |
 
 ---
 
 # Roadmap
 
 ## Short-term
-
-### JWT Authentication
-
-Implement token-based authentication so that protected resources are associated with the authenticated user instead of relying exclusively on client-provided user IDs.
 
 ### Anti-cheat Validation
 
@@ -838,17 +1188,6 @@ The server should validate, where possible:
 * Game session consistency
 
 This prevents players from modifying client-side requests to artificially increase their score or currency.
-
-### Deployment
-
-Deploy the backend to a public hosting platform such as:
-
-* Render
-* Fly.io
-
-### Production Frontend Integration
-
-Update the Phaser frontend to use the deployed API.
 
 ---
 
@@ -866,6 +1205,10 @@ Implement email ownership verification for registered accounts.
 
 Provide a secure password recovery flow.
 
+### Refresh Tokens
+
+Current JWTs expire after 24 hours with no refresh mechanism. A refresh-token flow may be introduced to improve UX without weakening security.
+
 ### Game Analytics
 
 Collect non-sensitive gameplay statistics such as:
@@ -880,34 +1223,41 @@ Collect non-sensitive gameplay statistics such as:
 
 # Known Limitations
 
-| Limitation                         | Status     |
-| ---------------------------------- | ---------- |
-| JWT authentication not implemented | ⚠️ Planned |
-| Server-side anti-cheat validation  | ⚠️ Planned |
-| Rate limiting                      | ⚠️ Planned |
-| Email verification                 | ⚠️ Planned |
-| Password reset                     | ⚠️ Planned |
-| Production deployment              | ⚠️ Planned |
+| Limitation                         | Status                        |
+| ---------------------------------- | ----------------------------- |
+| Server-side anti-cheat validation  | ⚠️ Planned                    |
+| Rate limiting                      | ⚠️ Planned                    |
+| Email verification                 | ⚠️ Planned                    |
+| Password reset                     | ⚠️ Planned                    |
+| Refresh-token flow                 | ⚠️ Planned                    |
+| Render Free cold starts            | ⚠️ Mitigated with UptimeRobot |
 
-The current backend should therefore be considered a **development / pre-production implementation** until authentication and server-side game validation are implemented.
+The current backend should therefore be considered a **pre-production implementation** until server-side game validation is implemented.
 
 ---
 
 # Security Considerations
 
-Before deploying the backend publicly, the following items should be addressed:
+The following items remain open for the security assessment phase:
 
-* Implement JWT authentication
-* Remove reliance on client-provided user identity
 * Implement server-side score validation
 * Implement server-side coin validation
-* Configure production CORS origins
-* Store all secrets exclusively in environment variables
-* Enable HTTPS
 * Implement rate limiting
 * Review database permissions
 * Review Supabase Row Level Security configuration
 * Add appropriate logging and monitoring
+* Conduct a structured security assessment (pentest)
+
+Items already addressed:
+
+* JWT authentication (HS256, 24h expiration)
+* Identity derived exclusively from the authenticated principal
+* BCrypt password hashing
+* Stateless sessions (no cookies, CSRF disabled accordingly)
+* Production CORS restricted to the deployed frontend origin
+* Secrets stored exclusively in environment variables
+* HTTPS in production
+* No JWTs in application logs
 
 ---
 
