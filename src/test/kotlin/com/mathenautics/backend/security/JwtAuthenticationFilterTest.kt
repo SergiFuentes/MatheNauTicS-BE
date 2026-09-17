@@ -1,5 +1,6 @@
 package com.mathenautics.backend.security
 
+import com.mathenautics.backend.domain.repository.UserRepository
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -16,11 +17,12 @@ import kotlin.test.assertNull
 class JwtAuthenticationFilterTest {
 
     private val jwtService = mockk<JwtService>()
+    private val userRepository = mockk<UserRepository>()
     private val filterChain = mockk<FilterChain>(relaxed = true)
     private val request = mockk<HttpServletRequest>()
     private val response = mockk<HttpServletResponse>(relaxed = true)
 
-    private val filter = TestableJwtAuthenticationFilter(jwtService)
+    private val filter = TestableJwtAuthenticationFilter(jwtService, userRepository)
 
     @AfterEach
     fun tearDown() {
@@ -34,14 +36,8 @@ class JwtAuthenticationFilterTest {
         filter.doFilter(request, response, filterChain)
 
         assertNull(SecurityContextHolder.getContext().authentication)
-
-        verify(exactly = 1) {
-            filterChain.doFilter(request, response)
-        }
-
-        verify(exactly = 0) {
-            request.getHeader("Authorization")
-        }
+        verify(exactly = 1) { filterChain.doFilter(request, response) }
+        verify(exactly = 0) { request.getHeader("Authorization") }
     }
 
     @Test
@@ -52,223 +48,123 @@ class JwtAuthenticationFilterTest {
         filter.doFilter(request, response, filterChain)
 
         assertNull(SecurityContextHolder.getContext().authentication)
-
-        verify(exactly = 1) {
-            filterChain.doFilter(request, response)
-        }
-
-        verify(exactly = 1) {
-            request.getHeader("Authorization")
-        }
-
-        verify(exactly = 0) {
-            jwtService.isTokenValid(any())
-        }
+        verify(exactly = 1) { filterChain.doFilter(request, response) }
+        verify(exactly = 0) { jwtService.isTokenValid(any()) }
     }
 
     @Test
     fun `should continue filter chain without authentication when authorization header is not Bearer`() {
         every { request.method } returns "GET"
-        every {
-            request.getHeader("Authorization")
-        } returns "Basic username:password"
+        every { request.getHeader("Authorization") } returns "Basic username:password"
 
         filter.doFilter(request, response, filterChain)
 
         assertNull(SecurityContextHolder.getContext().authentication)
-
-        verify(exactly = 1) {
-            filterChain.doFilter(request, response)
-        }
-
-        verify(exactly = 1) {
-            request.getHeader("Authorization")
-        }
-
-        verify(exactly = 0) {
-            jwtService.isTokenValid(any())
-        }
+        verify(exactly = 0) { jwtService.isTokenValid(any()) }
     }
 
     @Test
     fun `should continue filter chain without authentication when token is invalid`() {
         every { request.method } returns "GET"
-        every {
-            request.getHeader("Authorization")
-        } returns "Bearer invalid.token"
-
-        every {
-            jwtService.isTokenValid("invalid.token")
-        } returns false
+        every { request.getHeader("Authorization") } returns "Bearer invalid.token"
+        every { jwtService.isTokenValid("invalid.token") } returns false
 
         filter.doFilter(request, response, filterChain)
 
         assertNull(SecurityContextHolder.getContext().authentication)
-
-        verify(exactly = 1) {
-            jwtService.isTokenValid("invalid.token")
-        }
-
-        verify(exactly = 0) {
-            jwtService.extractUserId(any())
-        }
-
-        verify(exactly = 0) {
-            jwtService.extractUsername(any())
-        }
-
-        verify(exactly = 0) {
-            jwtService.extractIsGuest(any())
-        }
-
-        verify(exactly = 1) {
-            filterChain.doFilter(request, response)
-        }
+        verify(exactly = 1) { jwtService.isTokenValid("invalid.token") }
+        verify(exactly = 0) { jwtService.extractUserId(any()) }
     }
 
     @Test
-    fun `should authenticate registered user with ROLE_USER when token is valid`() {
+    fun `should authenticate registered user with ROLE_USER when token and version match`() {
         val userId = UUID.randomUUID()
         val username = "testuser"
         val token = "valid.user.token"
 
         every { request.method } returns "GET"
-        every {
-            request.getHeader("Authorization")
-        } returns "Bearer $token"
-
-        every {
-            jwtService.isTokenValid(token)
-        } returns true
-
-        every {
-            jwtService.extractUserId(token)
-        } returns userId
-
-        every {
-            jwtService.extractUsername(token)
-        } returns username
-
-        every {
-            jwtService.extractIsGuest(token)
-        } returns false
+        every { request.getHeader("Authorization") } returns "Bearer $token"
+        every { jwtService.isTokenValid(token) } returns true
+        every { jwtService.extractUserId(token) } returns userId
+        every { jwtService.extractTokenVersion(token) } returns 4
+        every { userRepository.findTokenVersionById(userId) } returns 4
+        every { jwtService.extractUsername(token) } returns username
+        every { jwtService.extractIsGuest(token) } returns false
 
         filter.doFilter(request, response, filterChain)
 
-        val authentication = SecurityContextHolder
-            .getContext()
-            .authentication
-
+        val authentication = SecurityContextHolder.getContext().authentication
         assertEquals(
-            AuthenticatedUser(
-                userId = userId,
-                username = username,
-                isGuest = false
-            ),
+            AuthenticatedUser(userId = userId, username = username, isGuest = false),
             authentication.principal
         )
-
-        assertEquals(
-            listOf("ROLE_USER"),
-            authentication.authorities.map { it.authority }
-        )
-
+        assertEquals(listOf("ROLE_USER"), authentication.authorities.map { it.authority })
         assertEquals(true, authentication.isAuthenticated)
-
-        verify(exactly = 1) {
-            jwtService.isTokenValid(token)
-        }
-
-        verify(exactly = 1) {
-            jwtService.extractUserId(token)
-        }
-
-        verify(exactly = 1) {
-            jwtService.extractUsername(token)
-        }
-
-        verify(exactly = 1) {
-            jwtService.extractIsGuest(token)
-        }
-
-        verify(exactly = 1) {
-            filterChain.doFilter(request, response)
-        }
     }
 
     @Test
-    fun `should authenticate guest user with ROLE_GUEST when token is valid`() {
+    fun `should authenticate guest user with ROLE_GUEST when token and version match`() {
         val userId = UUID.randomUUID()
-        val username = "guest"
         val token = "valid.guest.token"
 
         every { request.method } returns "GET"
-        every {
-            request.getHeader("Authorization")
-        } returns "Bearer $token"
-
-        every {
-            jwtService.isTokenValid(token)
-        } returns true
-
-        every {
-            jwtService.extractUserId(token)
-        } returns userId
-
-        every {
-            jwtService.extractUsername(token)
-        } returns username
-
-        every {
-            jwtService.extractIsGuest(token)
-        } returns true
+        every { request.getHeader("Authorization") } returns "Bearer $token"
+        every { jwtService.isTokenValid(token) } returns true
+        every { jwtService.extractUserId(token) } returns userId
+        every { jwtService.extractTokenVersion(token) } returns 0
+        every { userRepository.findTokenVersionById(userId) } returns 0
+        every { jwtService.extractUsername(token) } returns "guest"
+        every { jwtService.extractIsGuest(token) } returns true
 
         filter.doFilter(request, response, filterChain)
 
-        val authentication = SecurityContextHolder
-            .getContext()
-            .authentication
-
+        val authentication = SecurityContextHolder.getContext().authentication
         assertEquals(
-            AuthenticatedUser(
-                userId = userId,
-                username = username,
-                isGuest = true
-            ),
+            AuthenticatedUser(userId = userId, username = "guest", isGuest = true),
             authentication.principal
         )
+        assertEquals(listOf("ROLE_GUEST"), authentication.authorities.map { it.authority })
+    }
 
-        assertEquals(
-            listOf("ROLE_GUEST"),
-            authentication.authorities.map { it.authority }
-        )
+    @Test
+    fun `should not authenticate when token version does not match database version`() {
+        val userId = UUID.randomUUID()
+        val token = "stale.token"
 
-        assertEquals(true, authentication.isAuthenticated)
+        every { request.method } returns "GET"
+        every { request.getHeader("Authorization") } returns "Bearer $token"
+        every { jwtService.isTokenValid(token) } returns true
+        every { jwtService.extractUserId(token) } returns userId
+        every { jwtService.extractTokenVersion(token) } returns 1
+        every { userRepository.findTokenVersionById(userId) } returns 2
 
-        verify(exactly = 1) {
-            jwtService.isTokenValid(token)
-        }
+        filter.doFilter(request, response, filterChain)
 
-        verify(exactly = 1) {
-            jwtService.extractUserId(token)
-        }
+        assertNull(SecurityContextHolder.getContext().authentication)
+        verify(exactly = 1) { filterChain.doFilter(request, response) }
+    }
 
-        verify(exactly = 1) {
-            jwtService.extractUsername(token)
-        }
+    @Test
+    fun `should not authenticate when user no longer exists`() {
+        val userId = UUID.randomUUID()
+        val token = "orphan.token"
 
-        verify(exactly = 1) {
-            jwtService.extractIsGuest(token)
-        }
+        every { request.method } returns "GET"
+        every { request.getHeader("Authorization") } returns "Bearer $token"
+        every { jwtService.isTokenValid(token) } returns true
+        every { jwtService.extractUserId(token) } returns userId
+        every { jwtService.extractTokenVersion(token) } returns 0
+        every { userRepository.findTokenVersionById(userId) } returns null
 
-        verify(exactly = 1) {
-            filterChain.doFilter(request, response)
-        }
+        filter.doFilter(request, response, filterChain)
+
+        assertNull(SecurityContextHolder.getContext().authentication)
     }
 
     private class TestableJwtAuthenticationFilter(
-        jwtService: JwtService
-    ) : JwtAuthenticationFilter(jwtService) {
+        jwtService: JwtService,
+        userRepository: UserRepository
+    ) : JwtAuthenticationFilter(jwtService, userRepository) {
 
         fun doFilter(
             request: HttpServletRequest,

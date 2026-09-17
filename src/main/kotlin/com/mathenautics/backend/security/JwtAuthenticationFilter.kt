@@ -1,5 +1,6 @@
 package com.mathenautics.backend.security
 
+import com.mathenautics.backend.domain.repository.UserRepository
 import jakarta.servlet.FilterChain
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
@@ -13,7 +14,8 @@ import java.util.UUID
 
 @Component
 class JwtAuthenticationFilter(
-    private val jwtService: JwtService
+    private val jwtService: JwtService,
+    private val userRepository: UserRepository
 ) : OncePerRequestFilter() {
 
     companion object {
@@ -35,22 +37,27 @@ class JwtAuthenticationFilter(
 
         if (token != null && jwtService.isTokenValid(token)) {
             val userId = jwtService.extractUserId(token)
-            val username = jwtService.extractUsername(token)
-            val isGuest = jwtService.extractIsGuest(token)
+            val tokenVersion = jwtService.extractTokenVersion(token)
+            val currentVersion = userRepository.findTokenVersionById(userId)
 
-            val authorities = listOf(
-                SimpleGrantedAuthority(if (isGuest) "ROLE_GUEST" else "ROLE_USER")
-            )
+            if (currentVersion != null && currentVersion == tokenVersion) {
+                val username = jwtService.extractUsername(token)
+                val isGuest = jwtService.extractIsGuest(token)
 
-            val authentication: Authentication = UsernamePasswordAuthenticationToken(
-                AuthenticatedUser(userId, username, isGuest),
-                null,
-                authorities
-            )
+                val authorities = listOf(
+                    SimpleGrantedAuthority(if (isGuest) "ROLE_GUEST" else "ROLE_USER")
+                )
 
-            SecurityContextHolder.getContext().authentication = authentication
+                val authentication: Authentication = UsernamePasswordAuthenticationToken(
+                    AuthenticatedUser(userId, username, isGuest),
+                    null,
+                    authorities
+                )
 
-            logger.debug("Authenticated request for userId=$userId")
+                SecurityContextHolder.getContext().authentication = authentication
+
+                logger.debug("Authenticated request for userId=$userId")
+            }
         }
 
         filterChain.doFilter(request, response)

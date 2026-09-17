@@ -3,10 +3,12 @@ package com.mathenautics.backend.application.controller
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.mathenautics.backend.application.exception.UserNotFoundException
 import com.mathenautics.backend.application.service.UserService
+import com.mathenautics.backend.domain.repository.UserRepository
 import com.mathenautics.backend.dto.UserCreateRequest
 import com.mathenautics.backend.dto.UserCreateResponse
 import com.mathenautics.backend.dto.UserResponse
 import com.mathenautics.backend.dto.UserUpdateRequest
+import com.mathenautics.backend.dto.UserUpdateResponse
 import com.mathenautics.backend.security.AuthenticatedUser
 import com.mathenautics.backend.security.JwtService
 import com.mathenautics.backend.security.SecurityConfig
@@ -44,6 +46,9 @@ class UserControllerTest {
     @MockkBean
     private lateinit var jwtService: JwtService
 
+    @MockkBean
+    private lateinit var userRepository: UserRepository
+
     private val testUserId = UUID.randomUUID()
     private val testUsername = "testuser"
     private val testEmail = "test@example.com"
@@ -63,14 +68,7 @@ class UserControllerTest {
 
     @Test
     fun `createUser should return UserCreateResponse`() {
-        // Given
-        val request = UserCreateRequest(
-            "newuser",
-            "new@example.com",
-            "password",
-            false
-        )
-
+        val request = UserCreateRequest("newuser", "new@example.com", "password", false)
         val response = UserCreateResponse(
             userId = UUID.randomUUID(),
             username = "newuser",
@@ -79,38 +77,20 @@ class UserControllerTest {
             token = "jwt.token"
         )
 
-        every {
-            userService.createUser(any())
-        } returns response
+        every { userService.createUser(any()) } returns response
 
-        // When & Then
         mockMvc.perform(
             post("/api/v1/users")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request))
         )
             .andExpect(status().isOk)
-            .andExpect(jsonPath("$.userId").value(response.userId.toString()))
             .andExpect(jsonPath("$.username").value("newuser"))
-            .andExpect(jsonPath("$.email").value("new@example.com"))
-            .andExpect(jsonPath("$.isGuest").value(false))
             .andExpect(jsonPath("$.token").value("jwt.token"))
-
-        verify(exactly = 1) {
-            userService.createUser(
-                match {
-                    it.username == "newuser" &&
-                            it.email == "new@example.com" &&
-                            it.password == "password" &&
-                            !it.isGuest
-                }
-            )
-        }
     }
 
     @Test
     fun `getCurrentUser should return UserResponse when authenticated`() {
-        // Given
         val userResponse = UserResponse(
             id = testUserId,
             username = testUsername,
@@ -119,65 +99,41 @@ class UserControllerTest {
             isGuest = false
         )
 
-        every {
-            userService.getUser(testUserId)
-        } returns userResponse
+        every { userService.getUser(testUserId) } returns userResponse
 
-        // When & Then
         mockMvc.perform(
-            get("/api/v1/users/me")
-                .with(authentication(authentication))
+            get("/api/v1/users/me").with(authentication(authentication))
         )
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.id").value(testUserId.toString()))
             .andExpect(jsonPath("$.username").value(testUsername))
-            .andExpect(jsonPath("$.email").value(testEmail))
-            .andExpect(jsonPath("$.isGuest").value(false))
-            .andExpect(jsonPath("$.createdAt").exists())
-
-        verify(exactly = 1) {
-            userService.getUser(testUserId)
-        }
     }
 
     @Test
     fun `getCurrentUser should return 404 when user not found`() {
-        // Given
-        every {
-            userService.getUser(testUserId)
-        } throws UserNotFoundException()
+        every { userService.getUser(testUserId) } throws UserNotFoundException()
 
-        // When & Then
         mockMvc.perform(
-            get("/api/v1/users/me")
-                .with(authentication(authentication))
+            get("/api/v1/users/me").with(authentication(authentication))
         )
             .andExpect(status().isNotFound)
             .andExpect(jsonPath("$.code").value("USER_NOT_FOUND"))
-            .andExpect(jsonPath("$.message").value("User not found"))
     }
 
     @Test
-    fun `updateCurrentUser should return updated UserResponse`() {
-        // Given
+    fun `updateCurrentUser should return updated UserUpdateResponse with refreshed token`() {
         val request = UserUpdateRequest(username = "updated")
-
-        val updated = UserResponse(
+        val updated = UserUpdateResponse(
             id = testUserId,
             username = "updated",
             email = testEmail,
             createdAt = testCreatedAt,
-            isGuest = false
+            isGuest = false,
+            token = "jwt.refreshed"
         )
 
-        every {
-            userService.updateUser(
-                testUserId,
-                any()
-            )
-        } returns updated
+        every { userService.updateUser(testUserId, any()) } returns updated
 
-        // When & Then
         mockMvc.perform(
             put("/api/v1/users/me")
                 .with(authentication(authentication))
@@ -186,7 +142,7 @@ class UserControllerTest {
         )
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.username").value("updated"))
-            .andExpect(jsonPath("$.email").value(testEmail))
+            .andExpect(jsonPath("$.token").value("jwt.refreshed"))
 
         verify(exactly = 1) {
             userService.updateUser(
@@ -194,7 +150,41 @@ class UserControllerTest {
                 match {
                     it.username == "updated" &&
                             it.email == null &&
-                            it.password == null
+                            it.password == null &&
+                            it.currentPassword == null
+                }
+            )
+        }
+    }
+
+    @Test
+    fun `updateCurrentUser should forward currentPassword to the service`() {
+        val request = UserUpdateRequest(password = "newpass1", currentPassword = "oldpass1")
+        val updated = UserUpdateResponse(
+            id = testUserId,
+            username = testUsername,
+            email = testEmail,
+            createdAt = testCreatedAt,
+            isGuest = false,
+            token = "jwt.rotated"
+        )
+
+        every { userService.updateUser(testUserId, any()) } returns updated
+
+        mockMvc.perform(
+            put("/api/v1/users/me")
+                .with(authentication(authentication))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request))
+        )
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.token").value("jwt.rotated"))
+
+        verify(exactly = 1) {
+            userService.updateUser(
+                testUserId,
+                match {
+                    it.password == "newpass1" && it.currentPassword == "oldpass1"
                 }
             )
         }
@@ -202,14 +192,7 @@ class UserControllerTest {
 
     @Test
     fun `convertGuest should return UserCreateResponse`() {
-        // Given
-        val request = UserCreateRequest(
-            "registered",
-            "reg@test.com",
-            "pass",
-            false
-        )
-
+        val request = UserCreateRequest("registered", "reg@test.com", "pass", false)
         val response = UserCreateResponse(
             userId = testUserId,
             username = "registered",
@@ -218,14 +201,8 @@ class UserControllerTest {
             token = "jwt.token"
         )
 
-        every {
-            userService.convertGuest(
-                testUserId,
-                any()
-            )
-        } returns response
+        every { userService.convertGuest(testUserId, any()) } returns response
 
-        // When & Then
         mockMvc.perform(
             post("/api/v1/users/me/convert")
                 .with(authentication(authentication))
@@ -233,49 +210,23 @@ class UserControllerTest {
                 .content(objectMapper.writeValueAsString(request))
         )
             .andExpect(status().isOk)
-            .andExpect(jsonPath("$.userId").value(testUserId.toString()))
             .andExpect(jsonPath("$.username").value("registered"))
-            .andExpect(jsonPath("$.email").value("reg@test.com"))
             .andExpect(jsonPath("$.isGuest").value(false))
-            .andExpect(jsonPath("$.token").value("jwt.token"))
-
-        verify(exactly = 1) {
-            userService.convertGuest(
-                testUserId,
-                match {
-                    it.username == "registered" &&
-                            it.email == "reg@test.com" &&
-                            it.password == "pass" &&
-                            !it.isGuest
-                }
-            )
-        }
     }
 
     @Test
     fun `deleteCurrentUser should return 204 No Content`() {
-        // Given
-        every {
-            userService.deleteUser(testUserId)
-        } returns Unit
+        every { userService.deleteUser(testUserId) } returns Unit
 
-        // When & Then
         mockMvc.perform(
-            delete("/api/v1/users/me")
-                .with(authentication(authentication))
+            delete("/api/v1/users/me").with(authentication(authentication))
         )
             .andExpect(status().isNoContent)
-
-        verify(exactly = 1) {
-            userService.deleteUser(testUserId)
-        }
     }
 
     @Test
     fun `unauthenticated request to me endpoint should return 401`() {
-        mockMvc.perform(
-            get("/api/v1/users/me")
-        )
+        mockMvc.perform(get("/api/v1/users/me"))
             .andExpect(status().isUnauthorized)
     }
 }

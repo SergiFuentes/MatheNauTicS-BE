@@ -5,6 +5,7 @@ import com.mathenautics.backend.dto.UserCreateRequest
 import com.mathenautics.backend.dto.UserCreateResponse
 import com.mathenautics.backend.dto.UserResponse
 import com.mathenautics.backend.dto.UserUpdateRequest
+import com.mathenautics.backend.dto.UserUpdateResponse
 import com.mathenautics.backend.security.AuthenticatedUser
 import org.springframework.http.ResponseEntity
 import org.springframework.security.core.Authentication
@@ -31,7 +32,7 @@ class UserController(
     fun updateCurrentUser(
         @RequestBody request: UserUpdateRequest,
         authentication: Authentication
-    ): ResponseEntity<UserResponse> {
+    ): ResponseEntity<UserUpdateResponse> {
         val authenticatedUser = authentication.principal as AuthenticatedUser
         val updated = userService.updateUser(authenticatedUser.userId, request)
         return ResponseEntity.ok(updated)

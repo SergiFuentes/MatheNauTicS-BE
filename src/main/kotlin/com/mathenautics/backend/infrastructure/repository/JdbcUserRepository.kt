@@ -13,6 +13,7 @@ import java.util.UUID
 class JdbcUserRepository(
     private val jdbcTemplate: NamedParameterJdbcTemplate
 ) : UserRepository {
+
     override fun existsById(userId: UUID): Boolean =
         jdbcTemplate.queryForObject(
             "SELECT COUNT(*) FROM users WHERE id = :userId",
@@ -62,29 +63,41 @@ class JdbcUserRepository(
 
     override fun findCredentialsByIdentifier(identifier: String): UserCredentials? {
         val sql = """
-            SELECT id, username, email, password_hash, is_guest
+            SELECT id, username, email, password_hash, is_guest, token_version
             FROM users
             WHERE LOWER(username) = LOWER(:identifier)
                OR LOWER(email) = LOWER(:identifier)
             LIMIT 1
         """
         return jdbcTemplate.query(sql, MapSqlParameterSource("identifier", identifier)) { rs, _ ->
-            UserCredentials(
-                id = rs.getObject("id", UUID::class.java),
-                username = rs.getString("username"),
-                email = rs.getString("email"),
-                passwordHash = rs.getString("password_hash"),
-                isGuest = rs.getBoolean("is_guest")
-            )
+            mapCredentials(rs)
         }.singleOrNull()
     }
+
+    override fun findCredentialsById(userId: UUID): UserCredentials? {
+        val sql = """
+            SELECT id, username, email, password_hash, is_guest, token_version
+            FROM users
+            WHERE id = :userId
+        """
+        return jdbcTemplate.query(sql, MapSqlParameterSource("userId", userId)) { rs, _ ->
+            mapCredentials(rs)
+        }.singleOrNull()
+    }
+
+    override fun findTokenVersionById(userId: UUID): Int? =
+        jdbcTemplate.query(
+            "SELECT token_version FROM users WHERE id = :userId",
+            MapSqlParameterSource("userId", userId)
+        ) { rs, _ -> rs.getInt("token_version") }.singleOrNull()
 
     override fun update(
         userId: UUID,
         username: String?,
         email: String?,
         passwordHash: String?,
-        isGuest: Boolean?
+        isGuest: Boolean?,
+        tokenVersion: Int?
     ): UserResponse {
         val updates = mutableListOf<String>()
         val params = MapSqlParameterSource("userId", userId)
@@ -93,6 +106,7 @@ class JdbcUserRepository(
         email?.let { updates += "email = :email"; params.addValue("email", it) }
         passwordHash?.let { updates += "password_hash = :passwordHash"; params.addValue("passwordHash", it) }
         isGuest?.let { updates += "is_guest = :isGuest"; params.addValue("isGuest", it) }
+        tokenVersion?.let { updates += "token_version = :tokenVersion"; params.addValue("tokenVersion", it) }
 
         if (updates.isEmpty()) {
             return findById(userId)
@@ -130,5 +144,14 @@ class JdbcUserRepository(
         email = rs.getString("email"),
         createdAt = rs.getObject("created_at", OffsetDateTime::class.java),
         isGuest = rs.getBoolean("is_guest")
+    )
+
+    private fun mapCredentials(rs: java.sql.ResultSet) = UserCredentials(
+        id = rs.getObject("id", UUID::class.java),
+        username = rs.getString("username"),
+        email = rs.getString("email"),
+        passwordHash = rs.getString("password_hash"),
+        isGuest = rs.getBoolean("is_guest"),
+        tokenVersion = rs.getInt("token_version")
     )
 }
