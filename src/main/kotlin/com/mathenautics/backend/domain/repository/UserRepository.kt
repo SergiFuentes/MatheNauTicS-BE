@@ -11,6 +11,15 @@ interface UserRepository {
     fun create(username: String, email: String, passwordHash: String, isGuest: Boolean): UserResponse
     fun findById(userId: UUID): UserResponse?
     fun findCredentialsByIdentifier(identifier: String): UserCredentials?
-    fun update(userId: UUID, username: String?, email: String?, passwordHash: String?, isGuest: Boolean? = null): UserResponse
+    fun findCredentialsById(userId: UUID): UserCredentials?
+    fun findTokenVersionById(userId: UUID): Int?
+    fun update(
+        userId: UUID,
+        username: String?,
+        email: String?,
+        passwordHash: String?,
+        isGuest: Boolean? = null,
+        tokenVersion: Int? = null
+    ): UserResponse
     fun delete(userId: UUID): Boolean
 }

@@ -7,5 +7,6 @@ data class UserCredentials(
     val username: String,
     val email: String,
     val passwordHash: String,
-    val isGuest: Boolean
+    val isGuest: Boolean,
+    val tokenVersion: Int
 )

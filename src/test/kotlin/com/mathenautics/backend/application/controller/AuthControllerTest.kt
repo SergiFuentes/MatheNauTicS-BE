@@ -3,6 +3,7 @@ package com.mathenautics.backend.application.controller
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.mathenautics.backend.application.exception.InvalidCredentialsException
 import com.mathenautics.backend.application.service.AuthService
+import com.mathenautics.backend.domain.repository.UserRepository
 import com.mathenautics.backend.dto.LoginRequest
 import com.mathenautics.backend.dto.LoginResponse
 import com.mathenautics.backend.security.JwtAuthenticationFilter
@@ -40,9 +41,11 @@ class AuthControllerTest {
     @MockkBean
     private lateinit var jwtService: JwtService
 
+    @MockkBean
+    private lateinit var userRepository: UserRepository
+
     @Test
     fun `login with valid credentials should return LoginResponse`() {
-        // Given
         val request = LoginRequest("testuser", "password")
         val response = LoginResponse(
             userId = UUID.randomUUID(),
@@ -54,7 +57,6 @@ class AuthControllerTest {
 
         every { authService.login(any()) } returns response
 
-        // When & Then
         mockMvc.perform(
             post("/api/v1/auth/login")
                 .contentType(MediaType.APPLICATION_JSON)
@@ -67,7 +69,6 @@ class AuthControllerTest {
             .andExpect(jsonPath("$.isGuest").value(false))
             .andExpect(jsonPath("$.token").value("jwt.token"))
 
-        // Verify the service was called with the correct request
         val capturedRequest = slot<LoginRequest>()
 
         verify(exactly = 1) {
@@ -80,12 +81,10 @@ class AuthControllerTest {
 
     @Test
     fun `login with invalid credentials should return 401 Unauthorized`() {
-        // Given
         val request = LoginRequest("wrong", "wrong")
 
         every { authService.login(any()) } throws InvalidCredentialsException()
 
-        // When & Then
         mockMvc.perform(
             post("/api/v1/auth/login")
                 .contentType(MediaType.APPLICATION_JSON)

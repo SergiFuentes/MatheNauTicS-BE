@@ -27,7 +27,6 @@ class JdbcGameSessionRepositoryIntegrationTest : IntegrationTestBase() {
     fun cleanDatabase() {
         jdbcTemplate.execute("DELETE FROM game_sessions")
         jdbcTemplate.execute("DELETE FROM users")
-        // Insert a test user
         jdbcTemplate.update(
             """
             INSERT INTO users (id, username, email, password_hash, is_guest, created_at)
@@ -39,23 +38,21 @@ class JdbcGameSessionRepositoryIntegrationTest : IntegrationTestBase() {
 
     @Test
     fun `saveGameSession should insert session and return total coins`() {
-        // Given
+        val sessionToken = UUID.randomUUID()
 
-        // When
         val result = gameSessionRepository.saveGameSession(
             testUserId,
             testGameMode,
             testScore,
             testCoinsEarned,
-            testDuration
+            testDuration,
+            sessionToken
         )
 
-        // Then
         assertNotNull(result.sessionId)
         assertTrue(result.sessionId > 0)
         assertEquals(testCoinsEarned, result.totalCoins)
 
-        // Verify in database
         val count = jdbcTemplate.queryForObject(
             "SELECT COUNT(*) FROM game_sessions WHERE user_id = ?",
             Int::class.java,
@@ -63,7 +60,6 @@ class JdbcGameSessionRepositoryIntegrationTest : IntegrationTestBase() {
         ) ?: 0
         assertEquals(1, count)
 
-        // Check total coins in user's sessions
         val totalCoins = jdbcTemplate.queryForObject(
             "SELECT COALESCE(SUM(total_coins), 0) FROM game_sessions WHERE user_id = ?",
             Int::class.java,
@@ -74,11 +70,13 @@ class JdbcGameSessionRepositoryIntegrationTest : IntegrationTestBase() {
 
     @Test
     fun `saveGameSession multiple times should accumulate total coins`() {
-        // When
-        gameSessionRepository.saveGameSession(testUserId, testGameMode, 100, 50, 60)
-        gameSessionRepository.saveGameSession(testUserId, testGameMode, 200, 30, 45)
+        gameSessionRepository.saveGameSession(
+            testUserId, testGameMode, 100, 50, 60, UUID.randomUUID()
+        )
+        gameSessionRepository.saveGameSession(
+            testUserId, testGameMode, 200, 30, 45, UUID.randomUUID()
+        )
 
-        // Then
         val totalCoins = jdbcTemplate.queryForObject(
             "SELECT COALESCE(SUM(total_coins), 0) FROM game_sessions WHERE user_id = ?",
             Int::class.java,
@@ -88,30 +86,56 @@ class JdbcGameSessionRepositoryIntegrationTest : IntegrationTestBase() {
     }
 
     @Test
-    fun `getCurrentCoins should return sum of coins earned`() {
-        // Given
-        gameSessionRepository.saveGameSession(testUserId, testGameMode, 100, 50, 60)
-        gameSessionRepository.saveGameSession(testUserId, testGameMode, 200, 30, 45)
+    fun `saveGameSession with the same sessionToken is idempotent`() {
+        val sessionToken = UUID.randomUUID()
 
-        // When
+        val first = gameSessionRepository.saveGameSession(
+            testUserId, testGameMode, 100, 50, 60, sessionToken
+        )
+        val second = gameSessionRepository.saveGameSession(
+            testUserId, testGameMode, 100, 50, 60, sessionToken
+        )
+
+        assertEquals(first.sessionId, second.sessionId)
+        assertEquals(first.totalCoins, second.totalCoins)
+
+        val count = jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM game_sessions WHERE user_id = ?",
+            Int::class.java,
+            testUserId
+        ) ?: 0
+        assertEquals(1, count)
+
+        val totalCoins = jdbcTemplate.queryForObject(
+            "SELECT COALESCE(SUM(total_coins), 0) FROM game_sessions WHERE user_id = ?",
+            Int::class.java,
+            testUserId
+        ) ?: 0
+        assertEquals(50, totalCoins)
+    }
+
+    @Test
+    fun `getCurrentCoins should return sum of coins earned`() {
+        gameSessionRepository.saveGameSession(
+            testUserId, testGameMode, 100, 50, 60, UUID.randomUUID()
+        )
+        gameSessionRepository.saveGameSession(
+            testUserId, testGameMode, 200, 30, 45, UUID.randomUUID()
+        )
+
         val totalCoins = gameSessionRepository.getCurrentCoins(testUserId)
 
-        // Then
         assertEquals(80, totalCoins)
     }
 
     @Test
     fun `getCurrentCoins should return 0 if no sessions`() {
-        // When
         val totalCoins = gameSessionRepository.getCurrentCoins(testUserId)
-
-        // Then
         assertEquals(0, totalCoins)
     }
 
     @Test
     fun `getLeaderboard should return sorted entries`() {
-        // Given
         val user2Id = UUID.randomUUID()
         jdbcTemplate.update(
             """
@@ -121,17 +145,17 @@ class JdbcGameSessionRepositoryIntegrationTest : IntegrationTestBase() {
             user2Id
         )
 
-        // Insert sessions for user1 (score 100, coins 50) and user2 (score 200, coins 100)
-        gameSessionRepository.saveGameSession(testUserId, "adventure", 100, 50, 60)
-        Thread.sleep(10) // ensure different timestamps
-        gameSessionRepository.saveGameSession(user2Id, "adventure", 200, 100, 45)
+        gameSessionRepository.saveGameSession(
+            testUserId, "adventure", 100, 50, 60, UUID.randomUUID()
+        )
+        Thread.sleep(10)
+        gameSessionRepository.saveGameSession(
+            user2Id, "adventure", 200, 100, 45, UUID.randomUUID()
+        )
 
-        // When
         val leaderboard = gameSessionRepository.getLeaderboard(limit = 10, offset = 0)
 
-        // Then
         assertEquals(2, leaderboard.size)
-        // Highest score first (user2)
         assertEquals("user2", leaderboard[0].username)
         assertEquals(200, leaderboard[0].score)
         assertEquals(100, leaderboard[0].totalCoins)
@@ -144,7 +168,6 @@ class JdbcGameSessionRepositoryIntegrationTest : IntegrationTestBase() {
 
     @Test
     fun `getLeaderboard should filter by gameMode`() {
-        // Given
         val user2Id = UUID.randomUUID()
         jdbcTemplate.update(
             """
@@ -154,13 +177,17 @@ class JdbcGameSessionRepositoryIntegrationTest : IntegrationTestBase() {
             user2Id
         )
 
-        gameSessionRepository.saveGameSession(testUserId, "adventure", 100, 50, 60)
-        gameSessionRepository.saveGameSession(user2Id, "training", 200, 100, 45)
+        gameSessionRepository.saveGameSession(
+            testUserId, "adventure", 100, 50, 60, UUID.randomUUID()
+        )
+        gameSessionRepository.saveGameSession(
+            user2Id, "training", 200, 100, 45, UUID.randomUUID()
+        )
 
-        // When
-        val leaderboard = gameSessionRepository.getLeaderboard(limit = 10, offset = 0, gameMode = "adventure")
+        val leaderboard = gameSessionRepository.getLeaderboard(
+            limit = 10, offset = 0, gameMode = "adventure"
+        )
 
-        // Then
         assertEquals(1, leaderboard.size)
         assertEquals("testuser", leaderboard[0].username)
         assertEquals("adventure", leaderboard[0].gameMode)
@@ -168,7 +195,6 @@ class JdbcGameSessionRepositoryIntegrationTest : IntegrationTestBase() {
 
     @Test
     fun `getLeaderboard should respect limit and offset`() {
-        // Given
         val user2Id = UUID.randomUUID()
         val user3Id = UUID.randomUUID()
         jdbcTemplate.update(
@@ -186,16 +212,19 @@ class JdbcGameSessionRepositoryIntegrationTest : IntegrationTestBase() {
             user3Id
         )
 
-        gameSessionRepository.saveGameSession(testUserId, "adventure", 100, 50, 60)
-        gameSessionRepository.saveGameSession(user2Id, "adventure", 200, 100, 45)
-        gameSessionRepository.saveGameSession(user3Id, "adventure", 150, 75, 30)
+        gameSessionRepository.saveGameSession(
+            testUserId, "adventure", 100, 50, 60, UUID.randomUUID()
+        )
+        gameSessionRepository.saveGameSession(
+            user2Id, "adventure", 200, 100, 45, UUID.randomUUID()
+        )
+        gameSessionRepository.saveGameSession(
+            user3Id, "adventure", 150, 75, 30, UUID.randomUUID()
+        )
 
-        // When
         val leaderboard = gameSessionRepository.getLeaderboard(limit = 2, offset = 1)
 
-        // Then
         assertEquals(2, leaderboard.size)
-        // Ordered by score DESC: 200, 150, 100. Offset 1 => skip 200, get 150 and 100
         assertEquals("user3", leaderboard[0].username)
         assertEquals(150, leaderboard[0].score)
         assertEquals("testuser", leaderboard[1].username)

@@ -1,10 +1,11 @@
 package com.mathenautics.backend.infrastructure.repository
 
+import com.mathenautics.backend.application.exception.DuplicateGameSessionException
 import com.mathenautics.backend.domain.repository.GameSessionRepository
 import com.mathenautics.backend.dto.GameSessionResult
 import com.mathenautics.backend.dto.LeaderboardEntry
 import com.mathenautics.backend.util.toOffsetDateTime
-import org.springframework.dao.EmptyResultDataAccessException
+import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
 import org.springframework.stereotype.Repository
@@ -15,19 +16,33 @@ class JdbcGameSessionRepository(
     private val jdbcTemplate: NamedParameterJdbcTemplate
 ) : GameSessionRepository {
 
+    private data class ExistingSession(
+        val sessionId: Long,
+        val userId: UUID
+    )
+
     override fun saveGameSession(
         userId: UUID,
         gameMode: String,
         score: Int,
         coinsEarned: Int,
-        durationSeconds: Int
+        durationSeconds: Int,
+        sessionToken: UUID
     ): GameSessionResult {
-        val currentCoins = getCurrentCoins(userId)
-        val newTotal = currentCoins + coinsEarned
+        val existing = findSessionByToken(sessionToken)
+        if (existing != null) {
+            if (existing.userId != userId) {
+                throw DuplicateGameSessionException("Session token already used by another user")
+            }
+            return GameSessionResult(
+                totalCoins = getCurrentCoins(userId),
+                sessionId = existing.sessionId
+            )
+        }
 
         val insertSql = """
-            INSERT INTO game_sessions (user_id, game_mode, score, total_coins, duration_seconds)
-            VALUES (:userId, :gameMode, :score, :totalCoins, :durationSeconds)
+            INSERT INTO game_sessions (user_id, game_mode, score, total_coins, duration_seconds, session_token)
+            VALUES (:userId, :gameMode, :score, :totalCoins, :durationSeconds, :sessionToken)
             RETURNING id
         """
 
@@ -37,10 +52,25 @@ class JdbcGameSessionRepository(
             .addValue("score", score)
             .addValue("totalCoins", coinsEarned)
             .addValue("durationSeconds", durationSeconds)
+            .addValue("sessionToken", sessionToken)
 
-        val sessionId = jdbcTemplate.queryForObject(insertSql, params) { rs, _ ->
-            rs.getLong("id")
-        }!!
+        val sessionId = try {
+            jdbcTemplate.queryForObject(insertSql, params) { rs, _ ->
+                rs.getLong("id")
+            }!!
+        } catch (e: DataIntegrityViolationException) {
+            // Concurrent request with the same token won the race.
+            val raced = findSessionByToken(sessionToken)
+            if (raced != null && raced.userId == userId) {
+                return GameSessionResult(
+                    totalCoins = getCurrentCoins(userId),
+                    sessionId = raced.sessionId
+                )
+            }
+            throw e
+        }
+
+        val newTotal = getCurrentCoins(userId)
 
         return GameSessionResult(
             totalCoins = newTotal,
@@ -60,7 +90,6 @@ class JdbcGameSessionRepository(
     }
 
     override fun getLeaderboard(limit: Int, offset: Int, gameMode: String?): List<LeaderboardEntry> {
-        // Build the SQL dynamically based on whether gameMode is provided
         val sql = if (gameMode == null) {
             """
                 SELECT username, game_mode, score, total_coins, created_at
@@ -95,5 +124,18 @@ class JdbcGameSessionRepository(
                     ?: throw IllegalStateException("created_at cannot be null")
             )
         }
+    }
+
+    private fun findSessionByToken(token: UUID): ExistingSession? {
+        val sql = "SELECT id, user_id FROM game_sessions WHERE session_token = :token"
+        return jdbcTemplate.query(
+            sql,
+            MapSqlParameterSource("token", token)
+        ) { rs, _ ->
+            ExistingSession(
+                sessionId = rs.getLong("id"),
+                userId = rs.getObject("user_id", UUID::class.java)
+            )
+        }.singleOrNull()
     }
 }

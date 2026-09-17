@@ -16,11 +16,17 @@ class JwtService(
 ) {
     private val key: SecretKey by lazy { Keys.hmacShaKeyFor(secret.toByteArray()) }
 
-    fun generateToken(userId: UUID, username: String, isGuest: Boolean): String =
+    fun generateToken(
+        userId: UUID,
+        username: String,
+        isGuest: Boolean,
+        tokenVersion: Int = 0
+    ): String =
         Jwts.builder()
             .subject(userId.toString())
             .claim("username", username)
             .claim("isGuest", isGuest.toString())
+            .claim("tokenVersion", tokenVersion)
             .issuedAt(Date())
             .expiration(Date(System.currentTimeMillis() + expirationMs))
             .signWith(key)
@@ -36,6 +42,14 @@ class JwtService(
 
     fun extractIsGuest(token: String): Boolean =
         (extractClaims(token).get("isGuest", String::class.java) ?: "false").toBoolean()
+
+    fun extractTokenVersion(token: String): Int {
+        val raw = extractClaims(token)["tokenVersion"]
+        return when (raw) {
+            is Number -> raw.toInt()
+            else -> 0
+        }
+    }
 
     fun isTokenValid(token: String): Boolean =
         try {

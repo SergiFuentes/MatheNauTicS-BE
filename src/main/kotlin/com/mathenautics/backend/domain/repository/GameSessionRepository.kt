@@ -11,7 +11,8 @@ interface GameSessionRepository {
         gameMode: String,
         score: Int,
         coinsEarned: Int,
-        durationSeconds: Int
+        durationSeconds: Int,
+        sessionToken: UUID
     ): GameSessionResult
 
     fun getCurrentCoins(userId: UUID): Int

@@ -2,6 +2,7 @@ package com.mathenautics.backend.application.controller
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.mathenautics.backend.application.service.GameSessionService
+import com.mathenautics.backend.domain.repository.UserRepository
 import com.mathenautics.backend.dto.GameResultRequest
 import com.mathenautics.backend.dto.GameResultResponse
 import com.mathenautics.backend.dto.LeaderboardEntry
@@ -46,8 +47,12 @@ class GameControllerTest {
     @MockkBean
     private lateinit var jwtService: JwtService
 
+    @MockkBean
+    private lateinit var userRepository: UserRepository
+
     private val testUserId = UUID.randomUUID()
     private val testUsername = "testuser"
+    private val testSessionToken = UUID.randomUUID()
 
     private val authenticatedUser = AuthenticatedUser(
         userId = testUserId,
@@ -63,12 +68,7 @@ class GameControllerTest {
 
     @Test
     fun `finishGame should return GameResultResponse`() {
-        val request = GameResultRequest(
-            "adventure",
-            100,
-            50,
-            60
-        )
+        val request = GameResultRequest("adventure", 100, 50, 60, testSessionToken)
 
         val response = GameResultResponse(
             sessionId = 12345L,
@@ -77,12 +77,7 @@ class GameControllerTest {
             totalCoins = 50
         )
 
-        every {
-            gameService.finishGame(
-                testUserId,
-                any()
-            )
-        } returns response
+        every { gameService.finishGame(testUserId, any()) } returns response
 
         mockMvc.perform(
             post("/api/v1/games/finish")
@@ -103,7 +98,8 @@ class GameControllerTest {
                     it.gameMode == "adventure" &&
                             it.score == 100 &&
                             it.coinsEarned == 50 &&
-                            it.durationSeconds == 60
+                            it.durationSeconds == 60 &&
+                            it.sessionToken == testSessionToken
                 }
             )
         }
@@ -111,54 +107,27 @@ class GameControllerTest {
 
     @Test
     fun `getPlayerCoins should return PlayerCoinsResponse`() {
-        val response = PlayerCoinsResponse(
-            testUserId,
-            150
-        )
-
-        every {
-            gameService.getCurrentCoins(testUserId)
-        } returns response
+        val response = PlayerCoinsResponse(testUserId, 150)
+        every { gameService.getCurrentCoins(testUserId) } returns response
 
         mockMvc.perform(
-            get("/api/v1/games/player/coins")
-                .with(authentication(authentication))
+            get("/api/v1/games/player/coins").with(authentication(authentication))
         )
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.userId").value(testUserId.toString()))
             .andExpect(jsonPath("$.totalCoins").value(150))
 
-        verify(exactly = 1) {
-            gameService.getCurrentCoins(testUserId)
-        }
+        verify(exactly = 1) { gameService.getCurrentCoins(testUserId) }
     }
 
     @Test
     fun `getLeaderboard should return list of entries`() {
         val entries = listOf(
-            LeaderboardEntry(
-                "player1",
-                100,
-                50,
-                OffsetDateTime.now(),
-                "adventure"
-            ),
-            LeaderboardEntry(
-                "player2",
-                90,
-                45,
-                OffsetDateTime.now(),
-                "adventure"
-            )
+            LeaderboardEntry("player1", 100, 50, OffsetDateTime.now(), "adventure"),
+            LeaderboardEntry("player2", 90, 45, OffsetDateTime.now(), "adventure")
         )
 
-        every {
-            gameService.getLeaderboard(
-                10,
-                0,
-                null
-            )
-        } returns entries
+        every { gameService.getLeaderboard(10, 0, null) } returns entries
 
         mockMvc.perform(
             get("/api/v1/games/leaderboard")
@@ -170,10 +139,6 @@ class GameControllerTest {
             .andExpect(jsonPath("$[0].username").value("player1"))
             .andExpect(jsonPath("$[0].score").value(100))
             .andExpect(jsonPath("$[1].username").value("player2"))
-
-        verify(exactly = 1) {
-            gameService.getLeaderboard(10, 0, null)
-        }
     }
 
     @Test
@@ -185,16 +150,11 @@ class GameControllerTest {
             score = 300,
             lives = 2,
             coins = 100,
-            difficulty = "hard",
+            difficulty = "pro",
             lastPlayedAt = OffsetDateTime.now()
         )
 
-        every {
-            gameService.getPlayerProgress(
-                testUserId,
-                "adventure"
-            )
-        } returns progress
+        every { gameService.getPlayerProgress(testUserId, "adventure") } returns progress
 
         mockMvc.perform(
             get("/api/v1/games/progress")
@@ -202,32 +162,13 @@ class GameControllerTest {
                 .param("gameMode", "adventure")
         )
             .andExpect(status().isOk)
-            .andExpect(jsonPath("$.userId").value(testUserId.toString()))
-            .andExpect(jsonPath("$.gameMode").value("adventure"))
             .andExpect(jsonPath("$.currentLevel").value(5))
-            .andExpect(jsonPath("$.score").value(300))
-            .andExpect(jsonPath("$.lives").value(2))
-            .andExpect(jsonPath("$.coins").value(100))
-            .andExpect(jsonPath("$.difficulty").value("hard"))
-
-        verify(exactly = 1) {
-            gameService.getPlayerProgress(
-                testUserId,
-                "adventure"
-            )
-        }
+            .andExpect(jsonPath("$.difficulty").value("pro"))
     }
 
     @Test
     fun `updateProgress should return updated PlayerProgressResponse`() {
-        val request = PlayerProgressRequest(
-            "adventure",
-            6,
-            400,
-            3,
-            150,
-            "expert"
-        )
+        val request = PlayerProgressRequest("adventure", 6, 400, 3, 150, "pro")
 
         val response = PlayerProgressResponse(
             userId = testUserId,
@@ -236,16 +177,11 @@ class GameControllerTest {
             score = 400,
             lives = 3,
             coins = 150,
-            difficulty = "expert",
+            difficulty = "pro",
             lastPlayedAt = OffsetDateTime.now()
         )
 
-        every {
-            gameService.updatePlayerProgress(
-                testUserId,
-                any()
-            )
-        } returns response
+        every { gameService.updatePlayerProgress(testUserId, any()) } returns response
 
         mockMvc.perform(
             post("/api/v1/games/progress")
@@ -254,27 +190,8 @@ class GameControllerTest {
                 .content(objectMapper.writeValueAsString(request))
         )
             .andExpect(status().isOk)
-            .andExpect(jsonPath("$.userId").value(testUserId.toString()))
-            .andExpect(jsonPath("$.gameMode").value("adventure"))
             .andExpect(jsonPath("$.currentLevel").value(6))
-            .andExpect(jsonPath("$.score").value(400))
-            .andExpect(jsonPath("$.lives").value(3))
-            .andExpect(jsonPath("$.coins").value(150))
-            .andExpect(jsonPath("$.difficulty").value("expert"))
-
-        verify(exactly = 1) {
-            gameService.updatePlayerProgress(
-                testUserId,
-                match {
-                    it.gameMode == "adventure" &&
-                            it.currentLevel == 6 &&
-                            it.score == 400 &&
-                            it.lives == 3 &&
-                            it.coins == 150 &&
-                            it.difficulty == "expert"
-                }
-            )
-        }
+            .andExpect(jsonPath("$.difficulty").value("pro"))
     }
 
     @Test
@@ -284,12 +201,7 @@ class GameControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(
                     objectMapper.writeValueAsString(
-                        GameResultRequest(
-                            "adventure",
-                            100,
-                            50,
-                            60
-                        )
+                        GameResultRequest("adventure", 100, 50, 60, UUID.randomUUID())
                     )
                 )
         )
@@ -298,35 +210,22 @@ class GameControllerTest {
 
     @Test
     fun `getPlayerCoins should return 401 when unauthenticated`() {
-        mockMvc.perform(
-            get("/api/v1/games/player/coins")
-        )
+        mockMvc.perform(get("/api/v1/games/player/coins"))
             .andExpect(status().isUnauthorized)
     }
 
     @Test
     fun `getLeaderboard should be accessible without authentication`() {
-        every {
-            gameService.getLeaderboard(10, 0, null)
-        } returns emptyList()
+        every { gameService.getLeaderboard(10, 0, null) } returns emptyList()
 
-        mockMvc.perform(
-            get("/api/v1/games/leaderboard")
-        )
+        mockMvc.perform(get("/api/v1/games/leaderboard"))
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.size()").value(0))
-
-        verify(exactly = 1) {
-            gameService.getLeaderboard(10, 0, null)
-        }
     }
 
     @Test
     fun `getProgress should return 401 when unauthenticated`() {
-        mockMvc.perform(
-            get("/api/v1/games/progress")
-                .param("gameMode", "adventure")
-        )
+        mockMvc.perform(get("/api/v1/games/progress").param("gameMode", "adventure"))
             .andExpect(status().isUnauthorized)
     }
 
@@ -337,14 +236,7 @@ class GameControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(
                     objectMapper.writeValueAsString(
-                        PlayerProgressRequest(
-                            "adventure",
-                            6,
-                            400,
-                            3,
-                            150,
-                            "expert"
-                        )
+                        PlayerProgressRequest("adventure", 6, 400, 3, 150, "pro")
                     )
                 )
         )

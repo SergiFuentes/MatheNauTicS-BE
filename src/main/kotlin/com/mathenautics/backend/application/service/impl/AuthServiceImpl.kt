@@ -30,7 +30,8 @@ class AuthServiceImpl(
         val token = jwtService.generateToken(
             userId = credentials.id,
             username = credentials.username,
-            isGuest = credentials.isGuest
+            isGuest = credentials.isGuest,
+            tokenVersion = credentials.tokenVersion
         )
 
         return LoginResponse(

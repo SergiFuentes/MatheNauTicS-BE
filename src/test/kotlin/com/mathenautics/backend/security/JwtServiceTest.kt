@@ -11,9 +11,8 @@ class JwtServiceTest {
 
     private lateinit var jwtService: JwtService
 
-    // Valid 64-character secret for HS256
     private val secret = "test-secret-for-jwt-tests-only-1234567890abcdef"
-    private val expirationMs = 3600000L // 1 hour
+    private val expirationMs = 3600000L
 
     @BeforeEach
     fun setUp() {
@@ -22,12 +21,7 @@ class JwtServiceTest {
 
     @Test
     fun `generateToken should return a non-empty token`() {
-        val userId = UUID.randomUUID()
-        val username = "testuser"
-        val isGuest = false
-
-        val token = jwtService.generateToken(userId, username, isGuest)
-
+        val token = jwtService.generateToken(UUID.randomUUID(), "testuser", false, 0)
         assertNotNull(token)
         assertTrue(token.isNotEmpty())
     }
@@ -35,42 +29,24 @@ class JwtServiceTest {
     @Test
     fun `extractUserId should return the correct UUID from token`() {
         val userId = UUID.randomUUID()
-        val username = "testuser"
-        val isGuest = true
-
-        val token = jwtService.generateToken(userId, username, isGuest)
-        val extractedUserId = jwtService.extractUserId(token)
-
-        assertEquals(userId, extractedUserId)
+        val token = jwtService.generateToken(userId, "testuser", true, 3)
+        assertEquals(userId, jwtService.extractUserId(token))
     }
 
     @Test
     fun `extractUsername should return the correct username from token`() {
-        val userId = UUID.randomUUID()
-        val username = "testuser"
-        val isGuest = false
-
-        val token = jwtService.generateToken(userId, username, isGuest)
-        val extractedUsername = jwtService.extractUsername(token)
-
-        assertEquals(username, extractedUsername)
+        val token = jwtService.generateToken(UUID.randomUUID(), "testuser", false, 0)
+        assertEquals("testuser", jwtService.extractUsername(token))
     }
 
     @Test
     fun `extractIsGuest should return the correct isGuest flag from token`() {
-        val userId = UUID.randomUUID()
-        val username = "testuser"
-        val isGuest = true
-
-        val token = jwtService.generateToken(userId, username, isGuest)
-        val extractedIsGuest = jwtService.extractIsGuest(token)
-
-        assertTrue(extractedIsGuest)
+        val token = jwtService.generateToken(UUID.randomUUID(), "testuser", true, 0)
+        assertTrue(jwtService.extractIsGuest(token))
     }
 
     @Test
     fun `extractIsGuest should return false when claim is missing`() {
-        // Build a token without the "isGuest" claim using the same secret
         val userId = UUID.randomUUID()
         val key = Keys.hmacShaKeyFor(secret.toByteArray())
         val token = Jwts.builder()
@@ -81,72 +57,66 @@ class JwtServiceTest {
             .signWith(key)
             .compact()
 
-        val extractedIsGuest = jwtService.extractIsGuest(token)
+        assertFalse(jwtService.extractIsGuest(token))
+    }
 
-        assertFalse(extractedIsGuest)
+    @Test
+    fun `extractTokenVersion should return the value embedded at issue time`() {
+        val token = jwtService.generateToken(UUID.randomUUID(), "testuser", false, 7)
+        assertEquals(7, jwtService.extractTokenVersion(token))
+    }
+
+    @Test
+    fun `extractTokenVersion should return 0 when claim is missing`() {
+        val userId = UUID.randomUUID()
+        val key = Keys.hmacShaKeyFor(secret.toByteArray())
+        val token = Jwts.builder()
+            .subject(userId.toString())
+            .claim("username", "testuser")
+            .issuedAt(Date())
+            .expiration(Date(System.currentTimeMillis() + expirationMs))
+            .signWith(key)
+            .compact()
+
+        assertEquals(0, jwtService.extractTokenVersion(token))
     }
 
     @Test
     fun `isTokenValid should return true for a valid token`() {
-        val userId = UUID.randomUUID()
-        val username = "testuser"
-        val isGuest = false
-
-        val token = jwtService.generateToken(userId, username, isGuest)
-
+        val token = jwtService.generateToken(UUID.randomUUID(), "testuser", false, 0)
         assertTrue(jwtService.isTokenValid(token))
     }
 
     @Test
     fun `isTokenValid should return false for an expired token`() {
-        // Use a service with very short expiration to force expiry
-        val shortExpirationService = JwtService(secret, 1) // 1 ms
-        val userId = UUID.randomUUID()
-        val username = "testuser"
-        val isGuest = false
-
-        val token = shortExpirationService.generateToken(userId, username, isGuest)
-
-        // Wait a bit for it to expire
+        val shortExpirationService = JwtService(secret, 1)
+        val token = shortExpirationService.generateToken(UUID.randomUUID(), "testuser", false, 0)
         Thread.sleep(10)
-
         assertFalse(shortExpirationService.isTokenValid(token))
     }
 
     @Test
     fun `isTokenValid should return false for a malformed token`() {
-        val malformedToken = "this.is.not.a.jwt"
-
-        assertFalse(jwtService.isTokenValid(malformedToken))
+        assertFalse(jwtService.isTokenValid("this.is.not.a.jwt"))
     }
 
     @Test
     fun `isTokenValid should return false for a token with wrong signature`() {
-        // Generate a token with a different secret
         val wrongSecret = "wrongSecretKeyThatIsAtLeast32CharactersLongForHS256"
         val wrongJwtService = JwtService(wrongSecret, expirationMs)
-        val userId = UUID.randomUUID()
-        val username = "testuser"
-        val isGuest = false
-
-        val token = wrongJwtService.generateToken(userId, username, isGuest)
-
-        // Validate with original service (correct secret) -> should fail
+        val token = wrongJwtService.generateToken(UUID.randomUUID(), "testuser", false, 0)
         assertFalse(jwtService.isTokenValid(token))
     }
 
     @Test
     fun `extractUserId should throw exception for invalid token`() {
-        val invalidToken = "invalid.token.here"
-
         assertThrows(Exception::class.java) {
-            jwtService.extractUserId(invalidToken)
+            jwtService.extractUserId("invalid.token.here")
         }
     }
 
     @Test
     fun `extractUsername should return empty string for missing claim`() {
-        // Build a token without the "username" claim
         val userId = UUID.randomUUID()
         val key = Keys.hmacShaKeyFor(secret.toByteArray())
         val token = Jwts.builder()
@@ -156,7 +126,6 @@ class JwtServiceTest {
             .signWith(key)
             .compact()
 
-        val username = jwtService.extractUsername(token)
-        assertEquals("", username)
+        assertEquals("", jwtService.extractUsername(token))
     }
 }
