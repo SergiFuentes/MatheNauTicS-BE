@@ -1,10 +1,10 @@
-# MatheNauTicS Backend — Security Remediation Report
+# MatheNauTicS Backend â€” Security Remediation Report
 
 **Assessment reference:** MatheNauTicS Penetration Test Report (2026-09-16 to 2026-09-17)
 **Remediation period:** 2026-09-17
 **Scope:** Backend (`SergiFuentes/MatheNauTicS-BE`)
 **Related report:** Frontend companion report in `SergiFuentes/MatheNauTicS`
-**Status:** Complete — all in-scope findings verified, deployment validated in production
+**Status:** Complete â€” all in-scope findings verified, deployment validated in production
 
 ---
 
@@ -16,9 +16,9 @@ This report documents the remediation of the backend-side findings raised in the
 
 | Category | Findings | Status |
 |---|---|---|
-| Fully remediated (backend principal) | F-05, F-07, F-08, F-12, F-15, F-18, F-20, F-25 | Verified |
+| Fully remediated (backend principal) | F-05, F-07, F-08, F-09, F-12, F-15, F-18, F-20, F-25 | Verified |
 | Partially mitigated (backend principal) | F-01a, F-01b, F-01c, F-04, F-24 | Verified with documented limitations |
-| Out of scope (tracked) | F-09, F-19, F-22 | Not addressed |
+| Out of scope (tracked) | F-19, F-22 | Not addressed |
 
 **Key deliverables:**
 
@@ -27,6 +27,7 @@ This report documents the remediation of the backend-side findings raised in the
 - Idempotency for `/games/finish` enforced by a database UNIQUE constraint.
 - Password change requires re-authentication via `currentPassword`.
 - Generic registration errors to eliminate account enumeration.
+- In-memory, IP + endpoint rate limiting for `/auth/login` and `/users` (F-09).
 - Flyway migration `V10__2026_09_17.sql` applied to production.
 - 27 files changed; unit, integration, and controller tests updated.
 
@@ -46,13 +47,14 @@ This report documents the remediation of the backend-side findings raised in the
 - Leaderboard queries
 - Input validation on all user-controlled fields
 - Database schema and migrations
+- Rate limiting for authentication-adjacent endpoints (F-09)
 
 ### Out of scope
 
 - Frontend JavaScript execution (covered in the frontend companion report)
 - Supabase infrastructure configuration
 - Render infrastructure configuration
-- Rate limiting (tracked as F-09, F-22)
+- Rate limiting beyond `/auth/login` and `/users` (F-22 partially covered; see section 7)
 - Content-Security-Policy (tracked as F-19)
 
 ---
@@ -64,15 +66,15 @@ This report documents the remediation of the backend-side findings raised in the
 | F-01a | HIGH | Client-controlled score | `score` bounded to `[0, 1_000_000]` in `GameSessionServiceImpl` | `POST /games/finish` with `score=999999999` returns 400 | Partially mitigated |
 | F-01b | HIGH | Client-controlled coins | `coinsEarned` bounded to `[0, 1_000]` per session | `POST /games/finish` with `coinsEarned=999999` returns 400 | Partially mitigated |
 | F-01c | LOW | Client-controlled duration | `durationSeconds` bounded to `[0, 3_600]` | `POST /games/finish` with `durationSeconds=999999` returns 400 | Verified |
-| F-04 | HIGH | Replay of `/games/finish` | `sessionToken` UUID required + `UNIQUE` constraint on `game_sessions.session_token` + idempotent handling in `JdbcGameSessionRepository` | Two identical requests with same token → single row (`COUNT(*) = 1`) | Partially mitigated |
+| F-04 | HIGH | Replay of `/games/finish` | `sessionToken` UUID required + `UNIQUE` constraint on `game_sessions.session_token` + idempotent handling in `JdbcGameSessionRepository` | Two identical requests with same token â†’ single row (`COUNT(*) = 1`) | Partially mitigated |
 | F-05 | MEDIUM | Stale JWT after guest conversion | `token_version` incremented on conversion; `JwtAuthenticationFilter` compares JWT claim against database value | Pre-conversion JWT returns 401 after conversion | Verified |
 | F-07 | MEDIUM | PII in backend logs | Removed `println` statements from `UserServiceImpl` | Code review | Verified |
-| F-08 | MEDIUM | Username / email enumeration | Duplicate registration mapped to generic `REGISTRATION_FAILED` | Duplicate username → 409 `REGISTRATION_FAILED`; duplicate email → 409 `REGISTRATION_FAILED` | Verified |
+| F-08 | MEDIUM | Username / email enumeration | Duplicate registration mapped to generic `REGISTRATION_FAILED` | Duplicate username â†’ 409 `REGISTRATION_FAILED`; duplicate email â†’ 409 `REGISTRATION_FAILED` | Verified |
 | F-12 | MEDIUM | Unbounded `currentLevel` | `currentLevel` bounded to `[1, 13]` in `GameSessionServiceImpl.updatePlayerProgress` | `POST /games/progress` with `currentLevel=999999` returns 400 | Verified |
 | F-15 | LOW | Free-form `difficulty` | `difficulty` restricted to `easy`, `normal`, `pro` | `POST /games/progress` with `difficulty=hacker` returns 400 | Verified |
 | F-18 | MEDIUM | No JWT revocation | `token_version` claim compared against `users.token_version` on every authenticated request | JWT issued before a credential change returns 401 | Verified |
 | F-20 | MEDIUM | Password change without current password | `currentPassword` required and BCrypt-verified before any password update | 400 without `currentPassword`; 401 with incorrect; 200 with correct | Verified |
-| F-24 | LOW | BCrypt 72-byte truncation | Password validated to be ≤ 72 bytes UTF-8 before hashing | 100-byte password rejected at registration with 400 | Partially mitigated |
+| F-24 | LOW | BCrypt 72-byte truncation | Password validated to be â‰¤ 72 bytes UTF-8 before hashing | 100-byte password rejected at registration with 400 | Partially mitigated |
 | F-25 | LOW | Permissive email regex | Stricter regex requiring real TLD (`[A-Za-z]{2,}`) and restricted local-part | `a@b.c` rejected with 400 | Verified |
 
 ---
@@ -205,12 +207,40 @@ fun registrationConflict(ex: RuntimeException): ResponseEntity<ApiError> =
     error(HttpStatus.CONFLICT, "REGISTRATION_FAILED", "Registration failed")
 ```
 ### 5.6 Progress validation (F-12, F-15)
-`GameSessionServiceImpl.updatePlayerProgress` validates currentLevel ≤ 13 and difficulty ∈ {easy, normal, pro}.
+`GameSessionServiceImpl.updatePlayerProgress` validates currentLevel â‰¤ 13 and difficulty âˆˆ {easy, normal, pro}.
+
+
+### 5.7 Rate limiting for authentication endpoints (F-09)
+
+New servlet filter `RateLimitFilter` in `com.mathenautics.backend.security`,
+registered in `SecurityConfig` before the JWT filter. Instanced
+manually (not exposed as a Spring bean) to avoid double execution via
+Boot's servlet-filter auto-registration.
+
+Policy:
+
+| Endpoint                  | Limit        | Window | Key              |
+| ------------------------- | ------------ | ------ | ---------------- |
+| `POST /api/v1/auth/login` | 10 requests  | 15 min | client IP + path |
+| `POST /api/v1/users`      | 20 requests  | 60 min | client IP + path |
+
+- Client IP is the first entry of `X-Forwarded-For` (Render overwrites
+  this header). Fallback: `request.remoteAddr`.
+- State is per-instance, stored in a `ConcurrentHashMap` of
+  fixed-window buckets, pruned lazily every 5 minutes.
+- Rejected requests return `429 Too Many Requests` with a
+  `Retry-After` header (seconds) and the standard `ApiError`
+  body (`code = "RATE_LIMITED"`).
+- Configurable in `application.yaml` under `security.rate-limit.*`.
+
+Endpoints outside the two listed above are never affected by this filter,
+regardless of volume. Verified by `RateLimitFilterTest` and
+`SecurityIntegrationTest`.
 
 ## 6. Partially Mitigated Findings
 These findings have a real control in place, but the control does not eliminate the underlying issue. This section documents honestly what remains.
 
-### 6.1 F-01a / F-01b / F-01c — Client-controlled game results
+### 6.1 F-01a / F-01b / F-01c â€” Client-controlled game results
 What is now protected:
 
 Bounds on `score`, `coinsEarned`, and `durationSeconds`.
@@ -223,7 +253,7 @@ The client remains authoritative for values inside the accepted bounds. A caller
 
 Server-side verification of the actual gameplay would require a redesigned protocol (server-issued game session, signed replay, or input-stream verification), which is out of scope.
 
-### 6.2 F-04 — Replay of /games/finish
+### 6.2 F-04 â€” Replay of /games/finish
 What is now protected:
 
 A repeated sessionToken produces no new session row and no additional reward.
@@ -234,7 +264,7 @@ What is NOT protected:
 
 The client can generate a fresh sessionToken and submit a fabricated result within the bounds enforced by F-01a/b. Idempotency prevents duplication, not fabrication.
 
-### 6.3 F-24 — BCrypt 72-byte truncation
+### 6.3 F-24 â€” BCrypt 72-byte truncation
 What is now protected:
 
 Passwords whose UTF-8 representation exceeds 72 bytes are rejected at registration, login-boundary validation, and password change.
@@ -246,11 +276,11 @@ The **jbcrypt library** still truncates internally. If the validation layer is b
 ### 7. Out-of-Scope Findings
 These findings were raised in the pentest and remain unaddressed:
 
-F-09 — Login rate limiting. Not implemented.
+F-09 â€” Login rate limiting. Not implemented.
 
-F-19 — Content-Security-Policy. Not implemented.
+F-19 â€” Content-Security-Policy. Not implemented.
 
-F-22 — Guest creation rate limiting. Not implemented.
+F-22 â€” Guest creation rate limiting. Not implemented.
 
 These are documented as follow-up work and do not affect the closure of the other findings.
 
@@ -308,10 +338,36 @@ Coverage:
 
 * `/health` returns `{"status":"UP","database":"connected"}`.
 
+
+### 8.4 F-09 local verification
+
+F-09 was verified locally (not against production) through the automated
+test suite and a controlled manual run:
+
+- `./gradlew clean test` — green.
+- `RateLimitFilterTest` — 11 unit tests covering threshold, per-IP
+  isolation, per-endpoint isolation, window expiry, `Retry-After`
+  presence and range, header fallback, and non-applicability to other
+  endpoints.
+- `SecurityIntegrationTest` — 3 additional integration tests over the
+  real Spring Security chain.
+- Manual local run of the backend confirmed the 429 response with a
+  correct `Retry-After` value after exceeding the threshold.
+
+Production verification of F-09 was intentionally not performed, per the
+constraint of not sending bulk requests against the live API.
+
 ## 9. Residual Risk
 * **Game-result trust:** the client remains authoritative for values within the accepted bounds. Not addressed by this remediation.
 
-* **Rate limiting:** absent on /auth/login and /users. Could enable credential attacks at low volume and guest creation abuse.
+- **Rate limiting — in-memory and per-instance.** Buckets are lost on
+  redeploy and are not shared across replicas. Render currently runs a
+  single instance; this must be revisited before horizontal scaling.
+- **Rate limiting — shared NAT.** Users behind a common NAT / carrier IP
+  share the login and registration buckets. The chosen limits are
+  deliberately generous to avoid penalising legitimate behaviour.
+- **Rate limiting — scope.** It protects the two authentication-adjacent
+  endpoints only. It is defence-in-depth, not an anti-abuse guarantee.
 
 * **Content-Security-Policy:** absent on the backend. Mitigated in practice by the absence of user-generated HTML, but no defense-in-depth.
 
@@ -326,10 +382,18 @@ Coverage:
 
 * Migration: `V10__2026_09_17.sql`
 
-* Frontend companion report: SergiFuentes/MatheNauTicS — SECURITY_REMEDIATION_REPORT.md
+* Frontend companion report: SergiFuentes/MatheNauTicS â€” SECURITY_REMEDIATION_REPORT.md
 
 ## 11. Conclusion
 The backend remediation closes all in-scope findings with reproducible evidence. Three findings (F-01, F-04, F-24) are honestly documented as partially mitigated because the underlying protocol would require a larger redesign to be fully eliminated. These are recorded in Section 6 and carried forward as residual risks.
+
+F-09 (rate limiting on authentication endpoints) is now implemented,
+tested at both unit and integration level, and verified locally. It
+closes the last MEDIUM-severity finding on the backend and reduces the
+practical exposure of /auth/login and /users to low-volume credential
+attacks and automated account creation. Its limitations — in-memory
+state, per-instance scope, shared-NAT effect — are documented in
+Section 9.
 
 The system as deployed in production is measurably more robust than before the remediation: unbounded input is rejected, tokens can be revoked, credentials require re-authentication for sensitive operations, and account enumeration is eliminated at the registration endpoint.
 
