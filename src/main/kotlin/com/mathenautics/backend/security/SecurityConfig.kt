@@ -1,6 +1,8 @@
 package com.mathenautics.backend.security
 
+import com.fasterxml.jackson.databind.ObjectMapper
 import org.springframework.beans.factory.annotation.Value
+import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.http.HttpMethod
@@ -19,10 +21,23 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource
 
 @Configuration
 @EnableWebSecurity
+@EnableConfigurationProperties(RateLimitProperties::class)
 class SecurityConfig(
     private val jwtAuthenticationFilter: JwtAuthenticationFilter,
+    rateLimitProperties: RateLimitProperties,
+    objectMapper: ObjectMapper,
     @Value("\${cors.allowed-origins}") private val corsAllowedOrigins: String
 ) {
+
+    /**
+     * Rate limiter for authentication endpoints (F-09).
+     *
+     * Deliberately NOT a Spring bean: registering it in the security chain only
+     * avoids the double execution that would happen if Boot auto-registered it
+     * as a standalone servlet Filter.
+     */
+    private val rateLimitFilter: RateLimitFilter =
+        RateLimitFilter(rateLimitProperties, objectMapper)
 
     @Bean
     fun securityFilterChain(http: HttpSecurity): SecurityFilterChain =
@@ -55,6 +70,10 @@ class SecurityConfig(
                     .anyRequest().authenticated()
             }
             .addFilterBefore(
+                rateLimitFilter,
+                UsernamePasswordAuthenticationFilter::class.java
+            )
+            .addFilterBefore(
                 jwtAuthenticationFilter,
                 UsernamePasswordAuthenticationFilter::class.java
             )
@@ -80,12 +99,6 @@ class SecurityConfig(
         return source
     }
 
-    /**
-     * Provides a custom UserDetailsService to prevent Spring Boot from auto-configuring
-     * an InMemoryUserDetailsManager and generating a default development password.
-     *
-     * Authentication is performed by the application's JWT-based security filter.
-     */
     @Bean
     fun userDetailsService(): UserDetailsService {
         return UserDetailsService { _ ->
