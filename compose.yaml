@@ -1,0 +1,22 @@
+services:
+  postgres:
+    image: postgres:16.4
+    container_name: mathenautics-dev-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: mathenautics
+      POSTGRES_PASSWORD: mathenautics
+      POSTGRES_DB: mathenautics_dev
+    ports:
+      - "5433:5432"
+    volumes:
+      - mathenautics-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mathenautics -d mathenautics_dev"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  mathenautics-pgdata:
+    name: mathenautics-pgdata
