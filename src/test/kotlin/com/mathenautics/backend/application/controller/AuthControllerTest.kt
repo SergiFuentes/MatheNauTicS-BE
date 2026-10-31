@@ -26,7 +26,7 @@ import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import java.util.UUID
 
 @WebMvcTest(AuthController::class)
-@Import(SecurityConfig::class, JwtAuthenticationFilter::class)
+@Import(SecurityConfig::class, JwtAuthenticationFilter::class, Jackson3TestConfiguration::class)
 class AuthControllerTest {
 
     @Autowired
