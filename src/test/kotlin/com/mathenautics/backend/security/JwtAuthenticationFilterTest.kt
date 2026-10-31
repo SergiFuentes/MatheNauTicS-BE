@@ -119,7 +119,7 @@ class JwtAuthenticationFilterTest {
 
         filter.doFilter(request, response, filterChain)
 
-        val authentication = SecurityContextHolder.getContext().authentication
+        val authentication = assertNotNull(SecurityContextHolder.getContext().authentication)
         assertEquals(
             AuthenticatedUser(userId = userId, username = "guest", isGuest = true),
             authentication.principal
