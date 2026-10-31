@@ -24,12 +24,8 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-webmvc")
     implementation("org.springframework.boot:spring-boot-starter-jdbc")
     implementation("org.springframework.boot:spring-boot-starter-security")
-    // Temporary compatibility while the application still uses Jackson 2 APIs.
-    implementation("org.springframework.boot:spring-boot-jackson2")
     // Jackson 3 Kotlin module required by Spring Boot 4 HTTP message converters.
     implementation("tools.jackson.module:jackson-module-kotlin")
-    // Keep Jackson 2 Kotlin support for legacy APIs still using com.fasterxml.jackson.
-    implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
     implementation("org.jetbrains.kotlin:kotlin-reflect")
     implementation("org.jetbrains.kotlin:kotlin-stdlib")
     runtimeOnly("org.postgresql:postgresql")
