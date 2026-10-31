@@ -32,7 +32,7 @@ import java.time.OffsetDateTime
 import java.util.UUID
 
 @WebMvcTest(GameController::class)
-@Import(SecurityConfig::class)
+@Import(SecurityConfig::class, Jackson3TestConfiguration::class)
 class GameControllerTest {
 
     @Autowired
