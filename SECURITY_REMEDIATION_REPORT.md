@@ -64,7 +64,7 @@ This report documents the remediation of the backend-side findings raised in the
 | ID | Severity | Title | Mitigation | Verification | Status |
 |---|---|---|---|---|---|
 | F-01a | HIGH | Client-controlled score | `score` bounded to `[0, 1_000_000]` in `GameSessionServiceImpl` | `POST /games/finish` with `score=999999999` returns 400 | Partially mitigated |
-| F-01b | HIGH | Client-controlled coins | `coinsEarned` bounded to `[0, 1_000]` per session | `POST /games/finish` with `coinsEarned=999999` returns 400 | Partially mitigated |
+| F-01b | HIGH | Client-controlled coins | `coinsEarned` bounded to `[0, 10_000]` per session | `POST /games/finish` with `coinsEarned=999999` returns 400 (maximum is 10,000) | Partially mitigated |
 | F-01c | LOW | Client-controlled duration | `durationSeconds` bounded to `[0, 3_600]` | `POST /games/finish` with `durationSeconds=999999` returns 400 | Verified |
 | F-04 | HIGH | Replay of `/games/finish` | `sessionToken` UUID required + `UNIQUE` constraint on `game_sessions.session_token` + idempotent handling in `JdbcGameSessionRepository` | Two identical requests with same token â†’ single row (`COUNT(*) = 1`) | Partially mitigated |
 | F-05 | MEDIUM | Stale JWT after guest conversion | `token_version` incremented on conversion; `JwtAuthenticationFilter` compares JWT claim against database value | Pre-conversion JWT returns 401 after conversion | Verified |
