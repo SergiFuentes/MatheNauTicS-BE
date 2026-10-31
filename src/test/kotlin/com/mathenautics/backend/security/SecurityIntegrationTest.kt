@@ -8,6 +8,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.header
@@ -19,6 +20,34 @@ class SecurityIntegrationTest : IntegrationTestBase() {
 
     @Autowired
     private lateinit var mockMvc: MockMvc
+
+    @Test
+    fun `Cloudflare Pages preview origin is allowed by CORS preflight`() {
+        val origin = "https://fc2270bf.mathenautics.pages.dev"
+
+        mockMvc.perform(
+            options("/api/v1/users")
+                .header("Origin", origin)
+                .header("Access-Control-Request-Method", "POST")
+                .header("Access-Control-Request-Headers", "content-type")
+        )
+            .andExpect(status().isOk)
+            .andExpect(header().string("Access-Control-Allow-Origin", origin))
+            .andExpect(header().string("Access-Control-Allow-Credentials", "true"))
+            .andExpect(header().exists("Access-Control-Allow-Methods"))
+    }
+
+    @Test
+    fun `unrelated origin is not allowed by CORS preflight`() {
+        mockMvc.perform(
+            options("/api/v1/users")
+                .header("Origin", "https://untrusted.example")
+                .header("Access-Control-Request-Method", "POST")
+                .header("Access-Control-Request-Headers", "content-type")
+        )
+            .andExpect(status().isForbidden)
+            .andExpect(header().doesNotExist("Access-Control-Allow-Origin"))
+    }
 
     @Test
     fun `protected endpoint should return 401 without token`() {
