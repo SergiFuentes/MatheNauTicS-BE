@@ -1,6 +1,6 @@
 package com.mathenautics.backend.application.controller
 
-import com.fasterxml.jackson.databind.ObjectMapper
+import tools.jackson.databind.json.JsonMapper
 import com.mathenautics.backend.application.service.GameSessionService
 import com.mathenautics.backend.domain.repository.UserRepository
 import com.mathenautics.backend.dto.GameResultRequest
@@ -18,7 +18,7 @@ import io.mockk.mockk
 import io.mockk.verify
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest
 import org.springframework.context.annotation.Import
 import org.springframework.http.MediaType
 import org.springframework.security.core.Authentication
@@ -32,14 +32,14 @@ import java.time.OffsetDateTime
 import java.util.UUID
 
 @WebMvcTest(GameController::class)
-@Import(SecurityConfig::class)
+@Import(SecurityConfig::class, Jackson3TestConfiguration::class)
 class GameControllerTest {
 
     @Autowired
     private lateinit var mockMvc: MockMvc
 
     @Autowired
-    private lateinit var objectMapper: ObjectMapper
+    private lateinit var objectMapper: JsonMapper
 
     @MockkBean
     private lateinit var gameService: GameSessionService

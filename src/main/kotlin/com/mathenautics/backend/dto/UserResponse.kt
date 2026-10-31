@@ -1,5 +1,6 @@
 package com.mathenautics.backend.dto
 
+import com.fasterxml.jackson.annotation.JsonProperty
 import java.time.OffsetDateTime
 import java.util.UUID
 
@@ -8,5 +9,7 @@ data class UserResponse(
     val username: String,
     val email: String,
     val createdAt: OffsetDateTime,
+    @param:JsonProperty("isGuest")
+    @get:JsonProperty("isGuest")
     val isGuest: Boolean = true
 )

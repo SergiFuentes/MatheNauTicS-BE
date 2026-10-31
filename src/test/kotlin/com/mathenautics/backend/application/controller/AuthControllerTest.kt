@@ -1,6 +1,6 @@
 package com.mathenautics.backend.application.controller
 
-import com.fasterxml.jackson.databind.ObjectMapper
+import tools.jackson.databind.json.JsonMapper
 import com.mathenautics.backend.application.exception.InvalidCredentialsException
 import com.mathenautics.backend.application.service.AuthService
 import com.mathenautics.backend.domain.repository.UserRepository
@@ -16,7 +16,7 @@ import io.mockk.verify
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest
 import org.springframework.context.annotation.Import
 import org.springframework.http.MediaType
 import org.springframework.test.web.servlet.MockMvc
@@ -26,14 +26,14 @@ import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import java.util.UUID
 
 @WebMvcTest(AuthController::class)
-@Import(SecurityConfig::class, JwtAuthenticationFilter::class)
+@Import(SecurityConfig::class, JwtAuthenticationFilter::class, Jackson3TestConfiguration::class)
 class AuthControllerTest {
 
     @Autowired
     private lateinit var mockMvc: MockMvc
 
     @Autowired
-    private lateinit var objectMapper: ObjectMapper
+    private lateinit var objectMapper: JsonMapper
 
     @MockkBean
     private lateinit var authService: AuthService

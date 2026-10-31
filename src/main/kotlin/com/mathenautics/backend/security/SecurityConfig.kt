@@ -1,6 +1,6 @@
 package com.mathenautics.backend.security
 
-import com.fasterxml.jackson.databind.ObjectMapper
+import tools.jackson.databind.json.JsonMapper
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
@@ -25,7 +25,7 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource
 class SecurityConfig(
     private val jwtAuthenticationFilter: JwtAuthenticationFilter,
     rateLimitProperties: RateLimitProperties,
-    objectMapper: ObjectMapper,
+    objectMapper: JsonMapper,
     @Value("\${cors.allowed-origins}") private val corsAllowedOrigins: String,
     @Value("\${cors.allowed-origin-patterns:}") private val corsAllowedOriginPatterns: String
 ) {
