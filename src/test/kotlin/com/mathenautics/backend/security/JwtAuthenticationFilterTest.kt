@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test
 import org.springframework.security.core.context.SecurityContextHolder
 import java.util.UUID
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 
 class JwtAuthenticationFilterTest {
@@ -93,7 +94,7 @@ class JwtAuthenticationFilterTest {
 
         filter.doFilter(request, response, filterChain)
 
-        val authentication = SecurityContextHolder.getContext().authentication
+        val authentication = assertNotNull(SecurityContextHolder.getContext().authentication)
         assertEquals(
             AuthenticatedUser(userId = userId, username = username, isGuest = false),
             authentication.principal
