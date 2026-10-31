@@ -1,6 +1,6 @@
 package com.mathenautics.backend.dto
 
-import tools.jackson.annotation.JsonProperty
+import com.fasterxml.jackson.annotation.JsonProperty
 
 data class UserCreateRequest(
     val username: String,
