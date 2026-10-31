@@ -31,7 +31,7 @@ import java.time.OffsetDateTime
 import java.util.*
 
 @WebMvcTest(UserController::class)
-@Import(SecurityConfig::class)
+@Import(SecurityConfig::class, Jackson3TestConfiguration::class)
 class UserControllerTest {
 
     @Autowired
