@@ -15,7 +15,6 @@ spring:
     validate-on-migrate: false
 
   jackson:
-    use-jackson2-defaults: true
     deserialization:
       fail-on-unknown-properties: false
 
