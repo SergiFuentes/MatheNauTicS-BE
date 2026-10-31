@@ -1,5 +1,6 @@
 package com.mathenautics.backend.integration.repository
 
+import com.mathenautics.backend.application.exception.DuplicateGameSessionException
 import com.mathenautics.backend.infrastructure.repository.JdbcGameSessionRepository
 import com.mathenautics.backend.integration.IntegrationTestBase
 import org.junit.jupiter.api.Assertions.*
@@ -112,6 +113,50 @@ class JdbcGameSessionRepositoryIntegrationTest : IntegrationTestBase() {
             testUserId
         ) ?: 0
         assertEquals(50, totalCoins)
+    }
+
+    @Test
+    fun `saveGameSession with a reused token and changed score should conflict`() {
+        val sessionToken = UUID.randomUUID()
+
+        gameSessionRepository.saveGameSession(
+            testUserId, testGameMode, testScore, testCoinsEarned, testDuration, sessionToken
+        )
+
+        assertThrows(DuplicateGameSessionException::class.java) {
+            gameSessionRepository.saveGameSession(
+                testUserId, testGameMode, testScore + 1, testCoinsEarned, testDuration, sessionToken
+            )
+        }
+
+        assertEquals(1, jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM game_sessions WHERE user_id = ?",
+            Int::class.java,
+            testUserId
+        ))
+        assertEquals(testCoinsEarned, gameSessionRepository.getCurrentCoins(testUserId))
+    }
+
+    @Test
+    fun `saveGameSession with a reused token and changed reward should conflict`() {
+        val sessionToken = UUID.randomUUID()
+
+        gameSessionRepository.saveGameSession(
+            testUserId, testGameMode, testScore, testCoinsEarned, testDuration, sessionToken
+        )
+
+        assertThrows(DuplicateGameSessionException::class.java) {
+            gameSessionRepository.saveGameSession(
+                testUserId, testGameMode, testScore, testCoinsEarned + 1, testDuration, sessionToken
+            )
+        }
+
+        assertEquals(1, jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM game_sessions WHERE user_id = ?",
+            Int::class.java,
+            testUserId
+        ))
+        assertEquals(testCoinsEarned, gameSessionRepository.getCurrentCoins(testUserId))
     }
 
     @Test
