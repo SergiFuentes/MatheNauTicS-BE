@@ -1,6 +1,6 @@
 package com.mathenautics.backend.application.controller
 
-import com.fasterxml.jackson.databind.ObjectMapper
+import tools.jackson.databind.json.JsonMapper
 import com.mathenautics.backend.application.service.GameSessionService
 import com.mathenautics.backend.domain.repository.UserRepository
 import com.mathenautics.backend.dto.GameResultRequest
