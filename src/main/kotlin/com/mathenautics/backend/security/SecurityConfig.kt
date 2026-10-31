@@ -65,7 +65,6 @@ class SecurityConfig(
                         "/health",
                         "/api/v1/auth/login",
                         "/api/v1/users",
-                        "/api/v1/users/*/convert",
                         "/api/v1/games/leaderboard"
                     ).permitAll()
                     .anyRequest().authenticated()
