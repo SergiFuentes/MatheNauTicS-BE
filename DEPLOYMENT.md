@@ -57,6 +57,7 @@ Render detects pushes to `main`, builds, and rolls out on its own.
 | `SPRING_PROFILES_ACTIVE`  | `prod`                                   |
 | `JWT_SECRET`              | generated secret, ≥ 32 bytes (HS256)     |
 | `CORS_ALLOWED_ORIGINS`    | `https://mathenautics.pages.dev`         |
+| `cors.allowed-origin-patterns` | `https://*.mathenautics.pages.dev` (configured in `application-prod.yaml`) |
 | `DB_URL`                  | `jdbc:postgresql://<host>:5432/postgres` |
 | `DB_USERNAME`             | Supabase user                            |
 | `DB_PASSWORD`             | Supabase password                        |
@@ -246,9 +247,14 @@ Preflight `OPTIONS` requests succeeded for progress, leaderboard, users,
 and progress retrieval. The actual browser API requests then succeeded
 as well.
 
-The production CORS configuration is restricted to the Cloudflare Pages
-origin. It is not `*`, and permissive development origins are not
-present in production.
+The production CORS configuration allows the exact origin configured in
+`CORS_ALLOWED_ORIGINS` plus preview subdomains matching
+`https://*.mathenautics.pages.dev`. This supports hashed Cloudflare Pages
+preview URLs without allowing arbitrary websites. It does not use a global
+`*` origin, and permissive development origins are not present in production.
+
+The preview pattern is configured in `application-prod.yaml`; no Render
+environment-variable change is required for new preview hashes.
 
 When validating CORS, distinguish between:
 
