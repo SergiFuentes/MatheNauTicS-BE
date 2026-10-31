@@ -1,6 +1,8 @@
 # Game Result Integrity — Design for F-01a, F-01b and F-04
 
-**Status:** Design proposal; no gameplay contract or production behavior changed.
+**Status:** Design proposal with one narrow F-04 hardening; no gameplay contract, schema, or production deployment changed.
+
+The implementation in this PR rejects reuse of an existing `sessionToken` with a different user or changed result payload. It does not prevent a client from fabricating a result with a new token.
 **Scope:** `POST /api/v1/games/finish`, the frontend completion call sites, and persisted game-session rewards.
 
 ## 1. Current behavior
@@ -87,4 +89,4 @@ The implementation must handle concurrent completion requests with a database tr
 
 - **F-01a:** client-controlled score — bounds remain, but plausible fabricated values are still possible.
 - **F-01b:** client-controlled coins — bounds remain, but plausible fabricated rewards are still possible.
-- **F-04:** replay/idempotency — duplicate insertion is mitigated for a reused token; new client-generated tokens remain possible. Payload consistency and server-issued session identity need enforcement.
+- **F-04:** replay/idempotency — this PR enforces payload consistency for a reused token; new client-generated tokens remain possible. Server-issued session identity still needs enforcement.
