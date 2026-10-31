@@ -225,6 +225,20 @@ class UserControllerTest {
     }
 
     @Test
+    fun `unauthenticated guest conversion request should return 401`() {
+        val request = UserCreateRequest("registered", "reg@test.com", "pass", false)
+
+        mockMvc.perform(
+            post("/api/v1/users/me/convert")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request))
+        )
+            .andExpect(status().isUnauthorized)
+
+        verify(exactly = 0) { userService.convertGuest(any(), any()) }
+    }
+
+    @Test
     fun `unauthenticated request to me endpoint should return 401`() {
         mockMvc.perform(get("/api/v1/users/me"))
             .andExpect(status().isUnauthorized)
