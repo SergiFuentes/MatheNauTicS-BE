@@ -1,6 +1,6 @@
 package com.mathenautics.backend.security
 
-import tools.jackson.databind.ObjectMapper
+import tools.jackson.databind.json.JsonMapper
 import com.mathenautics.backend.dto.ApiError
 import jakarta.servlet.FilterChain
 import jakarta.servlet.http.HttpServletRequest
@@ -35,7 +35,7 @@ import java.util.concurrent.atomic.AtomicLong
  */
 class RateLimitFilter(
     private val properties: RateLimitProperties,
-    private val objectMapper: ObjectMapper,
+    private val objectMapper: JsonMapper,
     private val maxBuckets: Int = DEFAULT_MAX_BUCKETS
 ) : OncePerRequestFilter() {
 
