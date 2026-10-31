@@ -39,7 +39,7 @@ class GameControllerTest {
     private lateinit var mockMvc: MockMvc
 
     @Autowired
-    private lateinit var objectMapper: ObjectMapper
+    private lateinit var objectMapper: JsonMapper
 
     @MockkBean
     private lateinit var gameService: GameSessionService
