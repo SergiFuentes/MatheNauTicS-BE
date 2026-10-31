@@ -226,8 +226,11 @@ Policy:
 
 - Client IP is the first entry of `X-Forwarded-For` (Render overwrites
   this header). Fallback: `request.remoteAddr`.
-- State is per-instance, stored in a `ConcurrentHashMap` of
-  fixed-window buckets, pruned lazily every 5 minutes.
+- State is per-instance, stored in a `ConcurrentHashMap` of fixed-window
+  buckets with a hard capacity of 10,000 entries. Expired buckets are pruned
+  lazily every 5 minutes and swept immediately when capacity is reached.
+  When the store is full, requests for new IP + endpoint keys receive 429
+  until a bucket expires; existing buckets and their counters remain intact.
 - Rejected requests return `429 Too Many Requests` with a
   `Retry-After` header (seconds) and the standard `ApiError`
   body (`code = "RATE_LIMITED"`).
@@ -360,9 +363,13 @@ constraint of not sending bulk requests against the live API.
 ## 9. Residual Risk
 * **Game-result trust:** the client remains authoritative for values within the accepted bounds. Not addressed by this remediation.
 
-- **Rate limiting — in-memory and per-instance.** Buckets are lost on
-  redeploy and are not shared across replicas. Render currently runs a
-  single instance; this must be revisited before horizontal scaling.
+- **Rate limiting — in-memory and per-instance.** The bucket map is capped
+  at 10,000 entries to bound memory use. When full, new IP + endpoint keys
+  are temporarily rejected with 429 until an active bucket expires; this
+  protects memory but can temporarily affect legitimate clients during a
+  high-cardinality burst. Buckets are lost on redeploy and are not shared
+  across replicas. Render currently runs a single instance; this must be
+  revisited before horizontal scaling.
 - **Rate limiting — shared NAT.** Users behind a common NAT / carrier IP
   share the login and registration buckets. The chosen limits are
   deliberately generous to avoid penalising legitimate behaviour.
