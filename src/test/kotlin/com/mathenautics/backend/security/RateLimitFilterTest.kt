@@ -1,7 +1,7 @@
 package com.mathenautics.backend.security
 
-import tools.jackson.databind.ObjectMapper
-import tools.jackson.module.kotlin.jacksonObjectMapper
+import tools.jackson.databind.json.JsonMapper
+import tools.jackson.module.kotlin.jacksonJsonMapper
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -16,7 +16,7 @@ import java.util.concurrent.TimeUnit
 
 class RateLimitFilterTest {
 
-    private val objectMapper: ObjectMapper = jacksonObjectMapper()
+    private val objectMapper: JsonMapper = jacksonJsonMapper()
 
     private fun buildFilter(
         loginMax: Int = 3,
