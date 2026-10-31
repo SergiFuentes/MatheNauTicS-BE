@@ -26,7 +26,8 @@ class SecurityConfig(
     private val jwtAuthenticationFilter: JwtAuthenticationFilter,
     rateLimitProperties: RateLimitProperties,
     objectMapper: ObjectMapper,
-    @Value("\${cors.allowed-origins}") private val corsAllowedOrigins: String
+    @Value("\${cors.allowed-origins}") private val corsAllowedOrigins: String,
+    @Value("\${cors.allowed-origin-patterns:}") private val corsAllowedOriginPatterns: String
 ) {
 
     /**
@@ -86,8 +87,14 @@ class SecurityConfig(
             .map { it.trim() }
             .filter { it.isNotEmpty() }
 
+        val originPatterns = corsAllowedOriginPatterns
+            .split(",")
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+
         val configuration = CorsConfiguration().apply {
             allowedOrigins = origins
+            allowedOriginPatterns = originPatterns
             allowedMethods = listOf("GET", "POST", "PUT", "DELETE", "OPTIONS")
             allowedHeaders = listOf("*")
             allowCredentials = true
