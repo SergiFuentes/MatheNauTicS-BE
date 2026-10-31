@@ -24,16 +24,19 @@ import java.util.concurrent.atomic.AtomicLong
  *
  * Any other request (method or path) is passed through untouched.
  *
- * Limitations (documented in SECURITY_REMEDIATION_REPORT.md):
- *   - State is per-instance. Not shared across horizontally scaled replicas.
- *   - Buckets reset on process restart.
+ * Limitations:
+ *   - State is per-instance and resets on process restart.
  *   - Clients behind a shared NAT share a bucket.
  *   - X-Forwarded-For is only trustworthy behind a proxy that overwrites it
  *     (Render does).
+ *   - When the bounded bucket store is full, requests for new client/endpoint
+ *     keys are rejected until an existing bucket expires. Existing buckets
+ *     continue to be enforced normally.
  */
 class RateLimitFilter(
     private val properties: RateLimitProperties,
-    private val objectMapper: ObjectMapper
+    private val objectMapper: ObjectMapper,
+    private val maxBuckets: Int = DEFAULT_MAX_BUCKETS
 ) : OncePerRequestFilter() {
 
     companion object {
@@ -43,6 +46,7 @@ class RateLimitFilter(
         private const val X_FORWARDED_FOR = "X-Forwarded-For"
         private const val RETRY_AFTER_HEADER = "Retry-After"
         private const val CLEANUP_INTERVAL_MS = 5L * 60L * 1000L
+        const val DEFAULT_MAX_BUCKETS = 10_000
     }
 
     private enum class Rule(val path: String) {
@@ -55,7 +59,12 @@ class RateLimitFilter(
     }
 
     private val buckets = ConcurrentHashMap<String, Bucket>()
+    private val bucketCreationLock = Any()
     private val lastCleanupMs = AtomicLong(System.currentTimeMillis())
+
+    init {
+        require(maxBuckets > 0) { "maxBuckets must be greater than zero" }
+    }
 
     override fun doFilterInternal(
         request: HttpServletRequest,
@@ -73,14 +82,16 @@ class RateLimitFilter(
         val limit = limitFor(rule)
         val key = "${clientIp(request)}|${rule.name}"
         val now = Instant.now()
+        val bucket = getOrCreateBucket(key, now, limit.windowSeconds)
 
-        val bucket = buckets.compute(key) { _, existing ->
-            if (existing == null || !now.isBefore(existing.expiresAt)) {
-                Bucket(expiresAt = now.plusSeconds(limit.windowSeconds.toLong()))
-            } else {
-                existing
-            }
-        }!!
+        if (bucket == null) {
+            // Capacity exhaustion fails closed for new keys; existing buckets
+            // remain usable and keep their original counters.
+            val nextExpiry = buckets.values.minOfOrNull { it.expiresAt }
+                ?: now.plusSeconds(limit.windowSeconds.toLong())
+            writeRateLimited(response, nextExpiry, now)
+            return
+        }
 
         val attempt = bucket.counter.incrementAndGet()
 
@@ -90,6 +101,36 @@ class RateLimitFilter(
         }
 
         filterChain.doFilter(request, response)
+    }
+
+    private fun getOrCreateBucket(key: String, now: Instant, windowSeconds: Int): Bucket? {
+        val existing = buckets[key]
+        if (existing != null && now.isBefore(existing.expiresAt)) {
+            return existing
+        }
+
+        synchronized(bucketCreationLock) {
+            val current = buckets[key]
+            if (current != null) {
+                if (now.isBefore(current.expiresAt)) {
+                    return current
+                }
+                buckets.remove(key, current)
+            }
+
+            // A capacity check always performs a full expiry sweep, so stale
+            // entries cannot keep the map full until the periodic cleanup runs.
+            val cutoff = Instant.now()
+            buckets.entries.removeIf { !cutoff.isBefore(it.value.expiresAt) }
+
+            if (buckets.size >= maxBuckets) {
+                return null
+            }
+
+            return Bucket(now.plusSeconds(windowSeconds.toLong())).also {
+                buckets[key] = it
+            }
+        }
     }
 
     private fun ruleFor(request: HttpServletRequest): Rule? {

@@ -9,6 +9,10 @@ import org.junit.jupiter.api.Test
 import org.springframework.mock.web.MockFilterChain
 import org.springframework.mock.web.MockHttpServletRequest
 import org.springframework.mock.web.MockHttpServletResponse
+import java.util.concurrent.Callable
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 class RateLimitFilterTest {
 
@@ -18,13 +22,15 @@ class RateLimitFilterTest {
         loginMax: Int = 3,
         loginWindow: Int = 60,
         registrationMax: Int = 2,
-        registrationWindow: Int = 60
+        registrationWindow: Int = 60,
+        maxBuckets: Int = RateLimitFilter.DEFAULT_MAX_BUCKETS
     ): RateLimitFilter = RateLimitFilter(
         RateLimitProperties(
             login = RateLimitProperties.Rule(loginMax, loginWindow),
             registration = RateLimitProperties.Rule(registrationMax, registrationWindow)
         ),
-        objectMapper
+        objectMapper,
+        maxBuckets
     )
 
     private fun loginRequest(ip: String): MockHttpServletRequest =
@@ -103,6 +109,64 @@ class RateLimitFilterTest {
         Thread.sleep(1100)
 
         assertEquals(200, fire(filter, loginRequest("1.2.3.4")).status)
+    }
+
+    @Test
+    fun `full bucket store rejects new keys but preserves active buckets`() {
+        val filter = buildFilter(loginMax = 3, maxBuckets = 2)
+
+        assertEquals(200, fire(filter, loginRequest("1.2.3.4")).status)
+        assertEquals(200, fire(filter, loginRequest("5.6.7.8")).status)
+
+        val rejected = fire(filter, loginRequest("9.10.11.12"))
+        assertEquals(429, rejected.status)
+        assertNotNull(rejected.getHeader("Retry-After"))
+
+        // Existing keys keep their original bucket and are not evicted to make
+        // room for a new client.
+        assertEquals(200, fire(filter, loginRequest("1.2.3.4")).status)
+        assertEquals(200, fire(filter, loginRequest("5.6.7.8")).status)
+    }
+
+    @Test
+    fun `expired buckets are reclaimed when capacity is reached`() {
+        val filter = buildFilter(loginMax = 3, loginWindow = 1, maxBuckets = 1)
+
+        assertEquals(200, fire(filter, loginRequest("1.2.3.4")).status)
+        assertEquals(429, fire(filter, loginRequest("5.6.7.8")).status)
+
+        Thread.sleep(1100)
+
+        assertEquals(200, fire(filter, loginRequest("5.6.7.8")).status)
+    }
+
+    @Test
+    fun `concurrent new keys never exceed bucket capacity`() {
+        val capacity = 8
+        val requestCount = 40
+        val filter = buildFilter(loginMax = 100, maxBuckets = capacity)
+        val ready = CountDownLatch(requestCount)
+        val start = CountDownLatch(1)
+        val executor = Executors.newFixedThreadPool(requestCount)
+
+        try {
+            val tasks = (0 until requestCount).map { index ->
+                Callable {
+                    ready.countDown()
+                    check(start.await(5, TimeUnit.SECONDS))
+                    fire(filter, loginRequest("192.0.2.$index")).status
+                }
+            }
+            val futures = tasks.map(executor::submit)
+            assertTrue(ready.await(5, TimeUnit.SECONDS))
+            start.countDown()
+
+            val statuses = futures.map { it.get(5, TimeUnit.SECONDS) }
+            assertEquals(capacity, statuses.count { it == 200 })
+            assertEquals(requestCount - capacity, statuses.count { it == 429 })
+        } finally {
+            executor.shutdownNow()
+        }
     }
 
     @Test

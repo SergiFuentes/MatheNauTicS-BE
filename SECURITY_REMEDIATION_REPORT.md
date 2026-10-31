@@ -226,8 +226,16 @@ Policy:
 
 - Client IP is the first entry of `X-Forwarded-For` (Render overwrites
   this header). Fallback: `request.remoteAddr`.
-- State is per-instance, stored in a `ConcurrentHashMap` of
-  fixed-window buckets, pruned lazily every 5 minutes.
+- State is per-instance, stored in a `ConcurrentHashMap` of fixed-window
+  buckets with a hard capacity of 10,000 entries. Expired buckets are pruned
+  lazily every 5 minutes and swept immediately before a new bucket is denied
+  for capacity.
+- Capacity policy deliberately preserves existing active buckets rather than
+  evicting them: eviction could reset an active client's counter and allow
+  repeated attempts. If all 10,000 slots contain unexpired buckets, a new
+  IP + endpoint key receives 429 until a bucket expires; existing keys continue
+  to be enforced normally. This is an explicit fail-closed trade-off, not a
+  general overload-control mechanism.
 - Rejected requests return `429 Too Many Requests` with a
   `Retry-After` header (seconds) and the standard `ApiError`
   body (`code = "RATE_LIMITED"`).
@@ -360,9 +368,15 @@ constraint of not sending bulk requests against the live API.
 ## 9. Residual Risk
 * **Game-result trust:** the client remains authoritative for values within the accepted bounds. Not addressed by this remediation.
 
-- **Rate limiting — in-memory and per-instance.** Buckets are lost on
-  redeploy and are not shared across replicas. Render currently runs a
-  single instance; this must be revisited before horizontal scaling.
+- **Rate limiting — in-memory and per-instance.** The bucket map is capped
+  at 10,000 entries to bound memory use. Expired entries are swept before
+  rejecting a new key. If all slots are still active, new IP + endpoint keys
+  receive 429 while existing keys keep their counters. This avoids counter
+  resets caused by evicting active clients, but a sufficiently large
+  high-cardinality burst can temporarily affect legitimate new clients.
+  Buckets are lost on redeploy and are not shared across replicas. Render
+  currently runs a single instance; revisit only if horizontal scaling is
+  introduced or operational evidence warrants a stronger shared limiter.
 - **Rate limiting — shared NAT.** Users behind a common NAT / carrier IP
   share the login and registration buckets. The chosen limits are
   deliberately generous to avoid penalising legitimate behaviour.
