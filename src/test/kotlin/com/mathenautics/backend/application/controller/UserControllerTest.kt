@@ -1,6 +1,6 @@
 package com.mathenautics.backend.application.controller
 
-import com.fasterxml.jackson.databind.ObjectMapper
+import tools.jackson.databind.json.JsonMapper
 import com.mathenautics.backend.application.exception.UserNotFoundException
 import com.mathenautics.backend.application.service.UserService
 import com.mathenautics.backend.domain.repository.UserRepository
