@@ -53,6 +53,7 @@ The backend is responsible for:
 * Game session persistence
 * Coin persistence
 * Player progression
+* Up to 10 named, restorable game saves per user
 * Leaderboards
 * Game mode tracking
 * Health monitoring
@@ -203,6 +204,24 @@ Supported game modes include:
 * `training`
 
 Game sessions are used as the basis for player statistics and leaderboard information.
+
+---
+
+## Saved Games
+
+Saved games are separate from automatic player progress and completed-session history. Each user can keep up to **10 saved games** across the `adventure` and `training` modes. A save contains a JSON object representing the complete restorable state; the frontend is responsible for capturing and restoring the mode-specific state.
+
+The authenticated user is always taken from the JWT, and every read, update, and delete is scoped to that user.
+
+Endpoints:
+
+- `GET /api/v1/games/saves` — list the user's saves, newest update first.
+- `POST /api/v1/games/saves` — create a save (`gameMode`, `name`, `state`).
+- `GET /api/v1/games/saves/{id}` — retrieve a save.
+- `PUT /api/v1/games/saves/{id}` — update its name and state.
+- `DELETE /api/v1/games/saves/{id}` — delete a save.
+
+Creating an eleventh save returns HTTP `409` with code `GAME_SAVE_LIMIT_REACHED`. The limit is enforced transactionally so concurrent requests cannot exceed it.
 
 ---
 
