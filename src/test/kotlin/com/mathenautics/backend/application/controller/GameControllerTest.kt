@@ -5,6 +5,8 @@ import com.mathenautics.backend.application.service.GameSessionService
 import com.mathenautics.backend.domain.repository.UserRepository
 import com.mathenautics.backend.dto.GameResultRequest
 import com.mathenautics.backend.dto.GameResultResponse
+import com.mathenautics.backend.dto.StartGameSessionRequest
+import com.mathenautics.backend.dto.StartGameSessionResponse
 import com.mathenautics.backend.dto.LeaderboardEntry
 import com.mathenautics.backend.dto.PlayerCoinsResponse
 import com.mathenautics.backend.dto.PlayerProgressRequest
