@@ -8,6 +8,7 @@ import com.mathenautics.backend.dto.*
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.OffsetDateTime
+import java.time.ZoneOffset
 import java.util.UUID
 
 @Service
@@ -22,8 +23,29 @@ class GameSessionServiceImpl(
         private const val MAX_COINS_PER_SESSION = 10_000
         private const val MAX_DURATION_SECONDS = 3_600
         private const val MAX_LEVEL = 13
+        private const val GAME_SESSION_TTL_MINUTES = 60
         private val VALID_GAME_MODES = setOf("adventure", "training")
         private val VALID_DIFFICULTIES = setOf("easy", "normal", "pro")
+    }
+
+    @Transactional
+    override fun startGame(userId: UUID, request: StartGameSessionRequest): StartGameSessionResponse {
+        if (request.gameMode !in VALID_GAME_MODES) throw IllegalArgumentException("Invalid game mode")
+        if (!userRepository.existsById(userId)) throw IllegalArgumentException("User does not exist")
+
+        val sessionToken = UUID.randomUUID()
+        val expiresAt = OffsetDateTime.now(ZoneOffset.UTC).plusMinutes(GAME_SESSION_TTL_MINUTES.toLong())
+        gameSessionRepository.createGameSessionTicket(
+            userId = userId,
+            gameMode = request.gameMode,
+            sessionToken = sessionToken,
+            expiresAt = expiresAt
+        )
+        return StartGameSessionResponse(
+            sessionToken = sessionToken,
+            gameMode = request.gameMode,
+            expiresAt = expiresAt
+        )
     }
 
     @Transactional
