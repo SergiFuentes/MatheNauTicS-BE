@@ -1,6 +1,7 @@
 package com.mathenautics.backend.application.controller
 
 import tools.jackson.databind.json.JsonMapper
+import com.mathenautics.backend.application.service.GameSaveService
 import com.mathenautics.backend.application.service.GameSessionService
 import com.mathenautics.backend.domain.repository.UserRepository
 import com.mathenautics.backend.dto.GameResultRequest
@@ -43,6 +44,9 @@ class GameControllerTest {
 
     @MockkBean
     private lateinit var gameService: GameSessionService
+
+    @MockkBean
+    private lateinit var gameSaveService: GameSaveService
 
     @MockkBean
     private lateinit var jwtService: JwtService
