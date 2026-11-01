@@ -343,7 +343,7 @@ src/
 │           ├── V8__2026__09_03.sql
 │           ├── V9__2026_09_04.sql
 │           ├── V10__2026_09_17.sql
-│           └── V12__2026_11_01_game_saves.sql
+│           └── V11__2026_11_01_game_saves.sql
 │
 └── test/kotlin/
 ```
@@ -417,7 +417,7 @@ This provides explicit control over:
 
 # Database Schema
 
-The current schema (Flyway version 12) contains the following tables and views.
+The current schema (Flyway version 11) contains the following tables and views.
 
 ## `users`
 
