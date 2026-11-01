@@ -53,6 +53,7 @@ The backend is responsible for:
 * Game session persistence
 * Coin persistence
 * Player progression
+* Up to 10 named, restorable game saves per user
 * Leaderboards
 * Game mode tracking
 * Health monitoring
@@ -206,6 +207,24 @@ Game sessions are used as the basis for player statistics and leaderboard inform
 
 ---
 
+## Saved Games
+
+Saved games are separate from automatic player progress and completed-session history. Each user can keep up to **10 saved games** across the `adventure` and `training` modes. A save contains a JSON object representing the complete restorable state; the frontend is responsible for capturing and restoring the mode-specific state.
+
+The authenticated user is always taken from the JWT, and every read, update, and delete is scoped to that user.
+
+Endpoints:
+
+- `GET /api/v1/games/saves` — list the user's saves, newest update first.
+- `POST /api/v1/games/saves` — create a save (`gameMode`, `name`, `state`).
+- `GET /api/v1/games/saves/{id}` — retrieve a save.
+- `PUT /api/v1/games/saves/{id}` — update its name and state.
+- `DELETE /api/v1/games/saves/{id}` — delete a save.
+
+Creating an eleventh save returns HTTP `409` with code `GAME_SAVE_LIMIT_REACHED`. The limit is enforced transactionally so concurrent requests cannot exceed it.
+
+---
+
 ## Player Progress
 
 Player progression is persisted independently from individual game sessions.
@@ -322,7 +341,9 @@ src/
 │           ├── V6__2026_09_02.sql
 │           ├── V7__2026_09_02.sql
 │           ├── V8__2026__09_03.sql
-│           └── V9__2026_09_04.sql
+│           ├── V9__2026_09_04.sql
+│           ├── V10__2026_09_17.sql
+│           └── V11__2026_11_01_game_saves.sql
 │
 └── test/kotlin/
 ```
@@ -396,7 +417,7 @@ This provides explicit control over:
 
 # Database Schema
 
-The current schema (Flyway version 9) contains the following tables and views.
+The current schema (Flyway version 11) contains the following tables and views.
 
 ## `users`
 
