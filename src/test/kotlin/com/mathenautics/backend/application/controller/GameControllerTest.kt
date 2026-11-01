@@ -67,6 +67,26 @@ class GameControllerTest {
     }
 
     @Test
+    fun `startGame should return a server-issued session token`() {
+        val expiresAt = OffsetDateTime.now().plusMinutes(60)
+        val response = StartGameSessionResponse(testSessionToken, "adventure", expiresAt)
+        every { gameService.startGame(testUserId, StartGameSessionRequest("adventure")) } returns response
+
+        mockMvc.perform(
+            post("/api/v1/games/start")
+                .with(authentication(authentication))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(StartGameSessionRequest("adventure")))
+        )
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.sessionToken").value(testSessionToken.toString()))
+            .andExpect(jsonPath("$.gameMode").value("adventure"))
+            .andExpect(jsonPath("$.expiresAt").exists())
+
+        verify(exactly = 1) { gameService.startGame(testUserId, StartGameSessionRequest("adventure")) }
+    }
+
+    @Test
     fun `finishGame should return GameResultResponse`() {
         val request = GameResultRequest("adventure", 100, 50, 60, testSessionToken)
 
