@@ -9,6 +9,7 @@ import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
 import org.springframework.stereotype.Repository
+import java.time.OffsetDateTime
 import java.util.UUID
 
 @Repository
@@ -24,6 +25,24 @@ class JdbcGameSessionRepository(
         val coinsEarned: Int,
         val durationSeconds: Int
     )
+
+    override fun createGameSessionTicket(
+        userId: UUID,
+        gameMode: String,
+        sessionToken: UUID,
+        expiresAt: OffsetDateTime
+    ) {
+        val sql = """
+            INSERT INTO game_session_tickets (session_token, user_id, game_mode, expires_at)
+            VALUES (:sessionToken, :userId, :gameMode, :expiresAt)
+        """
+        val params = MapSqlParameterSource()
+            .addValue("sessionToken", sessionToken)
+            .addValue("userId", userId)
+            .addValue("gameMode", gameMode)
+            .addValue("expiresAt", expiresAt)
+        jdbcTemplate.update(sql, params)
+    }
 
     override fun saveGameSession(
         userId: UUID,
