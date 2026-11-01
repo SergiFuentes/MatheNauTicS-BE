@@ -30,6 +30,14 @@ class GlobalExceptionHandler {
     fun duplicateGameSession(ex: DuplicateGameSessionException): ResponseEntity<ApiError> =
         error(HttpStatus.CONFLICT, "DUPLICATE_SESSION", ex.message!!)
 
+    @ExceptionHandler(GameSaveLimitExceededException::class)
+    fun gameSaveLimitExceeded(ex: GameSaveLimitExceededException): ResponseEntity<ApiError> =
+        error(HttpStatus.CONFLICT, "GAME_SAVE_LIMIT_REACHED", ex.message!!)
+
+    @ExceptionHandler(GameSaveNotFoundException::class)
+    fun gameSaveNotFound(ex: GameSaveNotFoundException): ResponseEntity<ApiError> =
+        error(HttpStatus.NOT_FOUND, "GAME_SAVE_NOT_FOUND", ex.message!!)
+
     @ExceptionHandler(IllegalArgumentException::class)
     fun invalidArgument(ex: IllegalArgumentException): ResponseEntity<ApiError> =
         error(HttpStatus.BAD_REQUEST, "INVALID_REQUEST", ex.message ?: "Invalid request")
