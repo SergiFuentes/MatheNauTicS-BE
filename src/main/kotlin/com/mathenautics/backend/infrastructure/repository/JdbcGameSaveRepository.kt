@@ -6,6 +6,7 @@ import com.mathenautics.backend.dto.GameSaveResponse
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
 import org.springframework.stereotype.Repository
+import org.springframework.transaction.annotation.Transactional
 import tools.jackson.databind.JsonNode
 import tools.jackson.databind.json.JsonMapper
 import java.time.OffsetDateTime
@@ -52,6 +53,7 @@ class JdbcGameSaveRepository(
         ) }.singleOrNull()
     }
 
+    @Transactional
     override fun create(
         userId: UUID,
         gameMode: String,
