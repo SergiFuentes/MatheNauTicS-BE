@@ -8,6 +8,7 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.jdbc.core.JdbcTemplate
+import java.time.OffsetDateTime
 import java.util.UUID
 
 class JdbcGameSessionRepositoryIntegrationTest : IntegrationTestBase() {
@@ -35,6 +36,27 @@ class JdbcGameSessionRepositoryIntegrationTest : IntegrationTestBase() {
             """,
             testUserId
         )
+    }
+
+    @Test
+    fun `createGameSessionTicket should persist the authenticated user and expiry`() {
+        val sessionToken = UUID.randomUUID()
+        val expiresAt = OffsetDateTime.now().plusMinutes(60)
+
+        gameSessionRepository.createGameSessionTicket(
+            userId = testUserId,
+            gameMode = testGameMode,
+            sessionToken = sessionToken,
+            expiresAt = expiresAt
+        )
+
+        val row = jdbcTemplate.queryForMap(
+            "SELECT user_id, game_mode, expires_at FROM game_session_tickets WHERE session_token = ?",
+            sessionToken
+        )
+        assertEquals(testUserId, row["user_id"])
+        assertEquals(testGameMode, row["game_mode"])
+        assertNotNull(row["expires_at"])
     }
 
     @Test
