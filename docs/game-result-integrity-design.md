@@ -1,6 +1,6 @@
 # Game Result Integrity — Design for F-01a, F-01b and F-04
 
-**Status:** Design proposal with one narrow F-04 hardening; no gameplay contract, schema, or production deployment changed.
+**Status:** Staged implementation. The backend now has an authenticated session-start endpoint and ticket persistence, plus the F-04 payload-consistency hardening. `/games/finish` still accepts legacy client-generated tokens until the frontend is migrated; this is not yet an enforcement boundary and must not be treated as a complete F-01 remediation. Nothing has been deployed.
 
 The implementation in this PR rejects reuse of an existing `sessionToken` with a different user or changed result payload. It does not prevent a client from fabricating a result with a new token.
 **Scope:** `POST /api/v1/games/finish`, the frontend completion call sites, and persisted game-session rewards.
@@ -27,13 +27,13 @@ This prevents out-of-range values and duplicate inserts for a reused token. It d
 
 ### 3.1 Server-issued game sessions
 
-Add an authenticated start operation that creates a server-side session record containing at least:
+An authenticated `POST /api/v1/games/start` operation now creates a server-side ticket in `game_session_tickets` containing:
 - an unpredictable session identifier;
 - the authenticated user ID and game mode;
 - creation/expiry timestamps and a status (`ACTIVE`, `COMPLETED`, `EXPIRED`);
 - a rules/version identifier for deterministic validation.
 
-The client must not choose the owning user ID, session status, score, or reward. Completion must reference a server-issued session. A client-generated UUID alone is not sufficient.
+The response returns `sessionToken`, `gameMode`, and `expiresAt`. The current additive stage does not yet require `/games/finish` to use this ticket; that enforcement must follow after the frontend calls `/games/start`. The table currently records the ticket lifecycle metadata but does not yet derive scores or rewards.
 
 ### 3.2 Server-derived rewards
 
@@ -89,4 +89,4 @@ The implementation must handle concurrent completion requests with a database tr
 
 - **F-01a:** client-controlled score — bounds remain, but plausible fabricated values are still possible.
 - **F-01b:** client-controlled coins — bounds remain, but plausible fabricated rewards are still possible.
-- **F-04:** replay/idempotency — this PR enforces payload consistency for a reused token; new client-generated tokens remain possible. Server-issued session identity still needs enforcement.
+- **F-04:** replay/idempotency — this PR enforces payload consistency for a reused token and introduces server-issued tickets, but finish does not yet require those tickets. The enforcement rollout remains pending.
