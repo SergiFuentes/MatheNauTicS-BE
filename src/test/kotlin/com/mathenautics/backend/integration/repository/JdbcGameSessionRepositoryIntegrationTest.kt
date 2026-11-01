@@ -1,5 +1,6 @@
 package com.mathenautics.backend.integration.repository
 
+import com.mathenautics.backend.application.exception.DuplicateGameSessionException
 import com.mathenautics.backend.infrastructure.repository.JdbcGameSessionRepository
 import com.mathenautics.backend.integration.IntegrationTestBase
 import org.junit.jupiter.api.Assertions.*
@@ -7,6 +8,7 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.jdbc.core.JdbcTemplate
+import java.time.OffsetDateTime
 import java.util.UUID
 
 class JdbcGameSessionRepositoryIntegrationTest : IntegrationTestBase() {
@@ -34,6 +36,27 @@ class JdbcGameSessionRepositoryIntegrationTest : IntegrationTestBase() {
             """,
             testUserId
         )
+    }
+
+    @Test
+    fun `createGameSessionTicket should persist the authenticated user and expiry`() {
+        val sessionToken = UUID.randomUUID()
+        val expiresAt = OffsetDateTime.now().plusMinutes(60)
+
+        gameSessionRepository.createGameSessionTicket(
+            userId = testUserId,
+            gameMode = testGameMode,
+            sessionToken = sessionToken,
+            expiresAt = expiresAt
+        )
+
+        val row = jdbcTemplate.queryForMap(
+            "SELECT user_id, game_mode, expires_at FROM game_session_tickets WHERE session_token = ?",
+            sessionToken
+        )
+        assertEquals(testUserId, row["user_id"])
+        assertEquals(testGameMode, row["game_mode"])
+        assertNotNull(row["expires_at"])
     }
 
     @Test
@@ -112,6 +135,50 @@ class JdbcGameSessionRepositoryIntegrationTest : IntegrationTestBase() {
             testUserId
         ) ?: 0
         assertEquals(50, totalCoins)
+    }
+
+    @Test
+    fun `saveGameSession with a reused token and changed score should conflict`() {
+        val sessionToken = UUID.randomUUID()
+
+        gameSessionRepository.saveGameSession(
+            testUserId, testGameMode, testScore, testCoinsEarned, testDuration, sessionToken
+        )
+
+        assertThrows(DuplicateGameSessionException::class.java) {
+            gameSessionRepository.saveGameSession(
+                testUserId, testGameMode, testScore + 1, testCoinsEarned, testDuration, sessionToken
+            )
+        }
+
+        assertEquals(1, jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM game_sessions WHERE user_id = ?",
+            Int::class.java,
+            testUserId
+        ))
+        assertEquals(testCoinsEarned, gameSessionRepository.getCurrentCoins(testUserId))
+    }
+
+    @Test
+    fun `saveGameSession with a reused token and changed reward should conflict`() {
+        val sessionToken = UUID.randomUUID()
+
+        gameSessionRepository.saveGameSession(
+            testUserId, testGameMode, testScore, testCoinsEarned, testDuration, sessionToken
+        )
+
+        assertThrows(DuplicateGameSessionException::class.java) {
+            gameSessionRepository.saveGameSession(
+                testUserId, testGameMode, testScore, testCoinsEarned + 1, testDuration, sessionToken
+            )
+        }
+
+        assertEquals(1, jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM game_sessions WHERE user_id = ?",
+            Int::class.java,
+            testUserId
+        ))
+        assertEquals(testCoinsEarned, gameSessionRepository.getCurrentCoins(testUserId))
     }
 
     @Test

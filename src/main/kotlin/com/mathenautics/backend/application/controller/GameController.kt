@@ -13,6 +13,16 @@ class GameController(
     private val gameService: GameSessionService
 ) {
 
+    @PostMapping("/start")
+    fun startGame(
+        @RequestBody request: StartGameSessionRequest,
+        authentication: Authentication
+    ): ResponseEntity<StartGameSessionResponse> {
+        val authenticatedUser = authentication.principal as AuthenticatedUser
+        val response = gameService.startGame(authenticatedUser.userId, request)
+        return ResponseEntity.ok(response)
+    }
+
     @PostMapping("/finish")
     fun finishGame(
         @RequestBody request: GameResultRequest,

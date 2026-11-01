@@ -5,6 +5,8 @@ import com.mathenautics.backend.application.service.GameSessionService
 import com.mathenautics.backend.domain.repository.UserRepository
 import com.mathenautics.backend.dto.GameResultRequest
 import com.mathenautics.backend.dto.GameResultResponse
+import com.mathenautics.backend.dto.StartGameSessionRequest
+import com.mathenautics.backend.dto.StartGameSessionResponse
 import com.mathenautics.backend.dto.LeaderboardEntry
 import com.mathenautics.backend.dto.PlayerCoinsResponse
 import com.mathenautics.backend.dto.PlayerProgressRequest
@@ -64,6 +66,26 @@ class GameControllerTest {
         every { principal } returns authenticatedUser
         every { isAuthenticated } returns true
         every { name } returns testUsername
+    }
+
+    @Test
+    fun `startGame should return a server-issued session token`() {
+        val expiresAt = OffsetDateTime.now().plusMinutes(60)
+        val response = StartGameSessionResponse(testSessionToken, "adventure", expiresAt)
+        every { gameService.startGame(testUserId, StartGameSessionRequest("adventure")) } returns response
+
+        mockMvc.perform(
+            post("/api/v1/games/start")
+                .with(authentication(authentication))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(StartGameSessionRequest("adventure")))
+        )
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.sessionToken").value(testSessionToken.toString()))
+            .andExpect(jsonPath("$.gameMode").value("adventure"))
+            .andExpect(jsonPath("$.expiresAt").exists())
+
+        verify(exactly = 1) { gameService.startGame(testUserId, StartGameSessionRequest("adventure")) }
     }
 
     @Test
