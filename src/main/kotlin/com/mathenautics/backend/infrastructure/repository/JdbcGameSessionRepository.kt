@@ -52,6 +52,8 @@ class JdbcGameSessionRepository(
         durationSeconds: Int,
         sessionToken: UUID
     ): GameSessionResult {
+        // Completed sessions remain idempotent: retries return the original result,
+        // including after the ticket expires or has already been consumed.
         val existing = findSessionByToken(sessionToken)
         if (existing != null) {
             if (existing.userId != userId) {
@@ -62,6 +64,63 @@ class JdbcGameSessionRepository(
                 totalCoins = getCurrentCoins(userId),
                 sessionId = existing.sessionId
             )
+        }
+
+        // Lock the server-issued ticket so concurrent finish requests cannot both
+        // consume it. Recheck for a completed session after acquiring the lock.
+        val ticketSql = """
+            SELECT user_id, game_mode, expires_at, finished_at
+            FROM game_session_tickets
+            WHERE session_token = :sessionToken
+            FOR UPDATE
+        """
+        val ticket = jdbcTemplate.query(
+            ticketSql,
+            MapSqlParameterSource("sessionToken", sessionToken)
+        ) { rs, _ ->
+            mapOf(
+                "userId" to rs.getObject("user_id", UUID::class.java),
+                "gameMode" to rs.getString("game_mode"),
+                "expiresAt" to rs.getObject("expires_at", OffsetDateTime::class.java),
+                "finishedAt" to rs.getObject("finished_at", OffsetDateTime::class.java)
+            )
+        }.singleOrNull() ?: throw IllegalArgumentException("Invalid game session ticket")
+
+        if (ticket["userId"] != userId || ticket["gameMode"] != gameMode) {
+            throw IllegalArgumentException("Game session ticket does not match this user or game mode")
+        }
+
+        val racedSession = findSessionByToken(sessionToken)
+        if (racedSession != null) {
+            if (racedSession.userId != userId) {
+                throw DuplicateGameSessionException("Session token already used by another user")
+            }
+            ensureSamePayload(racedSession, gameMode, score, coinsEarned, durationSeconds)
+            return GameSessionResult(
+                totalCoins = getCurrentCoins(userId),
+                sessionId = racedSession.sessionId
+            )
+        }
+
+        val expiresAt = ticket["expiresAt"] as OffsetDateTime
+        if (!expiresAt.isAfter(OffsetDateTime.now())) {
+            throw IllegalArgumentException("Game session ticket has expired")
+        }
+        if (ticket["finishedAt"] != null) {
+            throw IllegalArgumentException("Game session ticket has already been used")
+        }
+
+        val consumeSql = """
+            UPDATE game_session_tickets
+            SET finished_at = CURRENT_TIMESTAMP
+            WHERE session_token = :sessionToken AND finished_at IS NULL
+        """
+        val consumed = jdbcTemplate.update(
+            consumeSql,
+            MapSqlParameterSource("sessionToken", sessionToken)
+        )
+        if (consumed != 1) {
+            throw IllegalArgumentException("Game session ticket has already been used")
         }
 
         val insertSql = """
