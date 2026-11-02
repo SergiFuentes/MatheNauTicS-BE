@@ -1,6 +1,7 @@
 package com.mathenautics.backend.application.controller
 
 import com.mathenautics.backend.application.service.GameSessionService
+import com.mathenautics.backend.application.service.GameSaveService
 import com.mathenautics.backend.dto.*
 import com.mathenautics.backend.security.AuthenticatedUser
 import org.springframework.http.HttpStatus
@@ -12,7 +13,8 @@ import java.util.UUID
 @RestController
 @RequestMapping("/api/v1/games")
 class GameController(
-    private val gameService: GameSessionService
+    private val gameService: GameSessionService,
+    private val gameSaveService: GameSaveService
 ) {
 
     @PostMapping("/start")
