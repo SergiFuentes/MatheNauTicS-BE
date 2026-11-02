@@ -38,6 +38,32 @@ class JdbcGameSessionRepositoryIntegrationTest : IntegrationTestBase() {
         )
     }
 
+    private fun saveSession(
+        userId: UUID,
+        gameMode: String,
+        score: Int,
+        coinsEarned: Int,
+        durationSeconds: Int,
+        sessionToken: UUID
+    ) = run {
+        val ticketExists = jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM game_session_tickets WHERE session_token = ?",
+            Int::class.java,
+            sessionToken
+        ) ?: 0
+        if (ticketExists == 0) {
+            gameSessionRepository.createGameSessionTicket(
+                userId = userId,
+                gameMode = gameMode,
+                sessionToken = sessionToken,
+                expiresAt = OffsetDateTime.now().plusMinutes(60)
+            )
+        }
+        gameSessionRepository.saveGameSession(
+            userId, gameMode, score, coinsEarned, durationSeconds, sessionToken
+        )
+    }
+
     @Test
     fun `createGameSessionTicket should persist the authenticated user and expiry`() {
         val sessionToken = UUID.randomUUID()
@@ -63,7 +89,7 @@ class JdbcGameSessionRepositoryIntegrationTest : IntegrationTestBase() {
     fun `saveGameSession should insert session and return total coins`() {
         val sessionToken = UUID.randomUUID()
 
-        val result = gameSessionRepository.saveGameSession(
+        val result = saveSession(
             testUserId,
             testGameMode,
             testScore,
@@ -93,10 +119,10 @@ class JdbcGameSessionRepositoryIntegrationTest : IntegrationTestBase() {
 
     @Test
     fun `saveGameSession multiple times should accumulate total coins`() {
-        gameSessionRepository.saveGameSession(
+        saveSession(
             testUserId, testGameMode, 100, 50, 60, UUID.randomUUID()
         )
-        gameSessionRepository.saveGameSession(
+        saveSession(
             testUserId, testGameMode, 200, 30, 45, UUID.randomUUID()
         )
 
@@ -112,10 +138,10 @@ class JdbcGameSessionRepositoryIntegrationTest : IntegrationTestBase() {
     fun `saveGameSession with the same sessionToken is idempotent`() {
         val sessionToken = UUID.randomUUID()
 
-        val first = gameSessionRepository.saveGameSession(
+        val first = saveSession(
             testUserId, testGameMode, 100, 50, 60, sessionToken
         )
-        val second = gameSessionRepository.saveGameSession(
+        val second = saveSession(
             testUserId, testGameMode, 100, 50, 60, sessionToken
         )
 
@@ -141,12 +167,12 @@ class JdbcGameSessionRepositoryIntegrationTest : IntegrationTestBase() {
     fun `saveGameSession with a reused token and changed score should conflict`() {
         val sessionToken = UUID.randomUUID()
 
-        gameSessionRepository.saveGameSession(
+        saveSession(
             testUserId, testGameMode, testScore, testCoinsEarned, testDuration, sessionToken
         )
 
         assertThrows(DuplicateGameSessionException::class.java) {
-            gameSessionRepository.saveGameSession(
+            saveSession(
                 testUserId, testGameMode, testScore + 1, testCoinsEarned, testDuration, sessionToken
             )
         }
@@ -163,12 +189,12 @@ class JdbcGameSessionRepositoryIntegrationTest : IntegrationTestBase() {
     fun `saveGameSession with a reused token and changed reward should conflict`() {
         val sessionToken = UUID.randomUUID()
 
-        gameSessionRepository.saveGameSession(
+        saveSession(
             testUserId, testGameMode, testScore, testCoinsEarned, testDuration, sessionToken
         )
 
         assertThrows(DuplicateGameSessionException::class.java) {
-            gameSessionRepository.saveGameSession(
+            saveSession(
                 testUserId, testGameMode, testScore, testCoinsEarned + 1, testDuration, sessionToken
             )
         }
@@ -182,11 +208,69 @@ class JdbcGameSessionRepositoryIntegrationTest : IntegrationTestBase() {
     }
 
     @Test
+    fun `saveGameSession should reject a token that was not issued by the server`() {
+        assertThrows(IllegalArgumentException::class.java) {
+            gameSessionRepository.saveGameSession(
+                testUserId, testGameMode, testScore, testCoinsEarned, testDuration, UUID.randomUUID()
+            )
+        }
+        assertEquals(0, jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM game_sessions",
+            Int::class.java
+        ))
+    }
+
+    @Test
+    fun `saveGameSession should reject a ticket for a different game mode`() {
+        val sessionToken = UUID.randomUUID()
+        gameSessionRepository.createGameSessionTicket(
+            testUserId, "adventure", sessionToken, OffsetDateTime.now().plusMinutes(60)
+        )
+
+        assertThrows(IllegalArgumentException::class.java) {
+            gameSessionRepository.saveGameSession(
+                testUserId, "training", testScore, testCoinsEarned, testDuration, sessionToken
+            )
+        }
+        assertEquals(0, jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM game_sessions",
+            Int::class.java
+        ))
+    }
+
+    @Test
+    fun `saveGameSession should reject an expired ticket`() {
+        val sessionToken = UUID.randomUUID()
+        gameSessionRepository.createGameSessionTicket(
+            testUserId, testGameMode, sessionToken, OffsetDateTime.now().plusMinutes(60)
+        )
+        jdbcTemplate.update(
+            """
+            UPDATE game_session_tickets
+            SET started_at = CURRENT_TIMESTAMP - INTERVAL '2 hours',
+                expires_at = CURRENT_TIMESTAMP - INTERVAL '1 hour'
+            WHERE session_token = ?
+            """,
+            sessionToken
+        )
+
+        assertThrows(IllegalArgumentException::class.java) {
+            gameSessionRepository.saveGameSession(
+                testUserId, testGameMode, testScore, testCoinsEarned, testDuration, sessionToken
+            )
+        }
+        assertEquals(0, jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM game_sessions",
+            Int::class.java
+        ))
+    }
+
+    @Test
     fun `getCurrentCoins should return sum of coins earned`() {
-        gameSessionRepository.saveGameSession(
+        saveSession(
             testUserId, testGameMode, 100, 50, 60, UUID.randomUUID()
         )
-        gameSessionRepository.saveGameSession(
+        saveSession(
             testUserId, testGameMode, 200, 30, 45, UUID.randomUUID()
         )
 
@@ -212,11 +296,11 @@ class JdbcGameSessionRepositoryIntegrationTest : IntegrationTestBase() {
             user2Id
         )
 
-        gameSessionRepository.saveGameSession(
+        saveSession(
             testUserId, "adventure", 100, 50, 60, UUID.randomUUID()
         )
         Thread.sleep(10)
-        gameSessionRepository.saveGameSession(
+        saveSession(
             user2Id, "adventure", 200, 100, 45, UUID.randomUUID()
         )
 
@@ -244,10 +328,10 @@ class JdbcGameSessionRepositoryIntegrationTest : IntegrationTestBase() {
             user2Id
         )
 
-        gameSessionRepository.saveGameSession(
+        saveSession(
             testUserId, "adventure", 100, 50, 60, UUID.randomUUID()
         )
-        gameSessionRepository.saveGameSession(
+        saveSession(
             user2Id, "training", 200, 100, 45, UUID.randomUUID()
         )
 
@@ -279,13 +363,13 @@ class JdbcGameSessionRepositoryIntegrationTest : IntegrationTestBase() {
             user3Id
         )
 
-        gameSessionRepository.saveGameSession(
+        saveSession(
             testUserId, "adventure", 100, 50, 60, UUID.randomUUID()
         )
-        gameSessionRepository.saveGameSession(
+        saveSession(
             user2Id, "adventure", 200, 100, 45, UUID.randomUUID()
         )
-        gameSessionRepository.saveGameSession(
+        saveSession(
             user3Id, "adventure", 150, 75, 30, UUID.randomUUID()
         )
 
