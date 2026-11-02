@@ -54,7 +54,7 @@ This report documents the remediation of the backend-side findings raised in the
 - Frontend JavaScript execution (covered in the frontend companion report)
 - Supabase infrastructure configuration
 - Render infrastructure configuration
-- Rate limiting beyond `/auth/login` and `/users` (F-22 partially covered; see section 7)
+- Guest-creation rate limiting (F-22), which remains unimplemented; see section 7
 - Content-Security-Policy (tracked as F-19)
 
 ---
@@ -284,11 +284,11 @@ The **jbcrypt library** still truncates internally. If the validation layer is b
 ### 7. Out-of-Scope Findings
 These findings were raised in the pentest and remain unaddressed:
 
-F-09 â€” Login rate limiting. Not implemented.
+F-09 â€” Login rate limiting is implemented for `/auth/login` and `/users` by the in-memory `RateLimitFilter`. Automated unit/integration tests passed locally. Production-specific rate-limit behavior was not directly load-tested; see section 9.
 
 F-19 â€” Content-Security-Policy. Not implemented.
 
-F-22 â€” Guest creation rate limiting. Not implemented.
+F-22 â€” Guest-creation rate limiting is not implemented. The existing limiter does not cover guest creation.
 
 These are documented as follow-up work and do not affect the closure of the other findings.
 

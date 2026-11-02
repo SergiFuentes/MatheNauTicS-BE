@@ -42,6 +42,34 @@ class GameSessionServiceImplTest {
         )
     }
 
+    // ===================== startGame =====================
+
+    @Test
+    fun `startGame should issue and persist a server-generated session token`() {
+        every { userRepository.existsById(testUserId) } returns true
+        every {
+            gameSessionRepository.createGameSessionTicket(testUserId, testGameMode, any(), any())
+        } returns Unit
+
+        val response = gameSessionService.startGame(testUserId, StartGameSessionRequest(testGameMode))
+
+        assertNotNull(response.sessionToken)
+        assertEquals(testGameMode, response.gameMode)
+        assertTrue(response.expiresAt.isAfter(OffsetDateTime.now()))
+        verify(exactly = 1) {
+            gameSessionRepository.createGameSessionTicket(testUserId, testGameMode, response.sessionToken, response.expiresAt)
+        }
+    }
+
+    @Test
+    fun `startGame with invalid mode should not create a ticket`() {
+        val ex = assertThrows(IllegalArgumentException::class.java) {
+            gameSessionService.startGame(testUserId, StartGameSessionRequest("invalid"))
+        }
+        assertEquals("Invalid game mode", ex.message)
+        verify(exactly = 0) { gameSessionRepository.createGameSessionTicket(any(), any(), any(), any()) }
+    }
+
     // ===================== finishGame =====================
 
     @Test
