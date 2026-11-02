@@ -208,6 +208,64 @@ class JdbcGameSessionRepositoryIntegrationTest : IntegrationTestBase() {
     }
 
     @Test
+    fun `saveGameSession should reject a token that was not issued by the server`() {
+        assertThrows(IllegalArgumentException::class.java) {
+            gameSessionRepository.saveGameSession(
+                testUserId, testGameMode, testScore, testCoinsEarned, testDuration, UUID.randomUUID()
+            )
+        }
+        assertEquals(0, jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM game_sessions",
+            Int::class.java
+        ))
+    }
+
+    @Test
+    fun `saveGameSession should reject a ticket for a different game mode`() {
+        val sessionToken = UUID.randomUUID()
+        gameSessionRepository.createGameSessionTicket(
+            testUserId, "adventure", sessionToken, OffsetDateTime.now().plusMinutes(60)
+        )
+
+        assertThrows(IllegalArgumentException::class.java) {
+            gameSessionRepository.saveGameSession(
+                testUserId, "training", testScore, testCoinsEarned, testDuration, sessionToken
+            )
+        }
+        assertEquals(0, jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM game_sessions",
+            Int::class.java
+        ))
+    }
+
+    @Test
+    fun `saveGameSession should reject an expired ticket`() {
+        val sessionToken = UUID.randomUUID()
+        gameSessionRepository.createGameSessionTicket(
+            testUserId, testGameMode, sessionToken, OffsetDateTime.now().plusMinutes(60)
+        )
+        jdbcTemplate.update(
+            """
+            UPDATE game_session_tickets
+            SET started_at = CURRENT_TIMESTAMP - INTERVAL '2 hours',
+                expires_at = CURRENT_TIMESTAMP - INTERVAL '1 hour'
+            WHERE session_token = ?
+            """,
+            sessionToken
+        )
+
+        assertThrows(IllegalArgumentException::class.java) {
+            gameSessionRepository.saveGameSession(
+                testUserId, testGameMode, testScore, testCoinsEarned, testDuration, sessionToken
+            )
+        }
+        assertEquals(0, jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM game_sessions",
+            Int::class.java
+        ))
+    }
+
+    @Test
     fun `getCurrentCoins should return sum of coins earned`() {
         saveSession(
             testUserId, testGameMode, 100, 50, 60, UUID.randomUUID()
