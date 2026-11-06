@@ -43,6 +43,7 @@ class JdbcPlayerProgressRepositoryIntegrationTest : IntegrationTestBase() {
             level = 5,
             score = 300,
             lives = 2,
+            coins = 100,
             difficulty = "hard"
         )
 
@@ -52,7 +53,7 @@ class JdbcPlayerProgressRepositoryIntegrationTest : IntegrationTestBase() {
         assertEquals(5, saved.currentLevel)
         assertEquals(300, saved.score)
         assertEquals(2, saved.lives)
-        assertEquals(0, saved.coins)
+        assertEquals(100, saved.coins)
         assertEquals("hard", saved.difficulty)
         assertNotNull(saved.lastPlayedAt)
 
@@ -74,6 +75,7 @@ class JdbcPlayerProgressRepositoryIntegrationTest : IntegrationTestBase() {
             level = 1,
             score = 0,
             lives = 3,
+            coins = 0,
             difficulty = "normal"
         )
 
@@ -84,6 +86,7 @@ class JdbcPlayerProgressRepositoryIntegrationTest : IntegrationTestBase() {
             level = 10,
             score = 500,
             lives = 1,
+            coins = 200,
             difficulty = "expert"
         )
 
@@ -92,7 +95,7 @@ class JdbcPlayerProgressRepositoryIntegrationTest : IntegrationTestBase() {
         assertEquals(10, updated.currentLevel)
         assertEquals(500, updated.score)
         assertEquals(1, updated.lives)
-        assertEquals(0, updated.coins)
+        assertEquals(200, updated.coins)
         assertEquals("expert", updated.difficulty)
         assertTrue(updated.lastPlayedAt.isAfter(initial.lastPlayedAt))
 
@@ -114,6 +117,7 @@ class JdbcPlayerProgressRepositoryIntegrationTest : IntegrationTestBase() {
             level = 3,
             score = 150,
             lives = 3,
+            coins = 50,
             difficulty = "normal"
         )
 
@@ -127,7 +131,7 @@ class JdbcPlayerProgressRepositoryIntegrationTest : IntegrationTestBase() {
         assertEquals(3, progress?.currentLevel)
         assertEquals(150, progress?.score)
         assertEquals(3, progress?.lives)
-        assertEquals(0, progress?.coins)
+        assertEquals(50, progress?.coins)
         assertEquals("normal", progress?.difficulty)
     }
 
