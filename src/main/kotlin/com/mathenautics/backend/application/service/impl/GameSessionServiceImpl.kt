@@ -20,7 +20,6 @@ class GameSessionServiceImpl(
 
     companion object {
         private const val MAX_SCORE = 1_000_000
-        private const val MAX_COINS_PER_SESSION = 10_000
         private const val MAX_DURATION_SECONDS = 3_600
         private const val MAX_LEVEL = 13
         private const val GAME_SESSION_TTL_MINUTES = 60
@@ -52,10 +51,6 @@ class GameSessionServiceImpl(
     override fun finishGame(userId: UUID, request: GameResultRequest): GameResultResponse {
         if (request.score < 0) throw IllegalArgumentException("Score cannot be negative")
         if (request.score > MAX_SCORE) throw IllegalArgumentException("Score exceeds the maximum allowed value")
-        if (request.coinsEarned < 0) throw IllegalArgumentException("Coins earned cannot be negative")
-        if (request.coinsEarned > MAX_COINS_PER_SESSION) {
-            throw IllegalArgumentException("Coins earned exceed the maximum allowed value")
-        }
         if (request.durationSeconds < 0) throw IllegalArgumentException("Duration cannot be negative")
         if (request.durationSeconds > MAX_DURATION_SECONDS) {
             throw IllegalArgumentException("Duration exceeds the maximum allowed value")
@@ -70,7 +65,8 @@ class GameSessionServiceImpl(
             userId = userId,
             gameMode = request.gameMode,
             score = request.score,
-            coinsEarned = request.coinsEarned,
+            // Client-reported rewards are untrusted; persist no new coins until rewards are server-validated.
+            coinsEarned = 0,
             durationSeconds = request.durationSeconds,
             sessionToken = request.sessionToken
         )
@@ -129,7 +125,8 @@ class GameSessionServiceImpl(
             level = request.currentLevel,
             score = request.score,
             lives = request.lives,
-            coins = request.coins,
+            // Keep client-supplied coin values out of persistent progress.
+            coins = 0,
             difficulty = request.difficulty
         )
     }
