@@ -21,7 +21,6 @@ interface PlayerProgressRepository {
      * @param level the current level to save
      * @param score the current score (default 0)
      * @param lives the current lives (default 3)
-     * @param coins the current coins (default 0)
      * @param difficulty the current difficulty (default "normal")
      * @return the updated progress response
      */
@@ -31,7 +30,6 @@ interface PlayerProgressRepository {
         level: Int,
         score: Int = 0,
         lives: Int = 3,
-        coins: Int = 0,
         difficulty: String = "normal"
     ): PlayerProgressResponse
 }
