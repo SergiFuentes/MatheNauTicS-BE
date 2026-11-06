@@ -22,7 +22,6 @@ class JdbcGameSessionRepository(
         val userId: UUID,
         val gameMode: String,
         val score: Int,
-        val coinsEarned: Int,
         val durationSeconds: Int
     )
 
@@ -59,7 +58,7 @@ class JdbcGameSessionRepository(
             if (existing.userId != userId) {
                 throw DuplicateGameSessionException("Session token already used by another user")
             }
-            ensureSamePayload(existing, gameMode, score, coinsEarned, durationSeconds)
+            ensureSamePayload(existing, gameMode, score, durationSeconds)
             return GameSessionResult(
                 totalCoins = getCurrentCoins(userId),
                 sessionId = existing.sessionId
@@ -95,7 +94,7 @@ class JdbcGameSessionRepository(
             if (racedSession.userId != userId) {
                 throw DuplicateGameSessionException("Session token already used by another user")
             }
-            ensureSamePayload(racedSession, gameMode, score, coinsEarned, durationSeconds)
+            ensureSamePayload(racedSession, gameMode, score, durationSeconds)
             return GameSessionResult(
                 totalCoins = getCurrentCoins(userId),
                 sessionId = racedSession.sessionId
@@ -145,7 +144,7 @@ class JdbcGameSessionRepository(
             // Concurrent request with the same token won the race.
             val raced = findSessionByToken(sessionToken)
             if (raced != null && raced.userId == userId) {
-                ensureSamePayload(raced, gameMode, score, coinsEarned, durationSeconds)
+                ensureSamePayload(raced, gameMode, score, durationSeconds)
                 return GameSessionResult(
                     totalCoins = getCurrentCoins(userId),
                     sessionId = raced.sessionId
@@ -214,13 +213,11 @@ class JdbcGameSessionRepository(
         existing: ExistingSession,
         gameMode: String,
         score: Int,
-        coinsEarned: Int,
         durationSeconds: Int
     ) {
         if (
             existing.gameMode != gameMode ||
             existing.score != score ||
-            existing.coinsEarned != coinsEarned ||
             existing.durationSeconds != durationSeconds
         ) {
             throw DuplicateGameSessionException(
@@ -231,7 +228,7 @@ class JdbcGameSessionRepository(
 
     private fun findSessionByToken(token: UUID): ExistingSession? {
         val sql = """
-            SELECT id, user_id, game_mode, score, total_coins, duration_seconds
+            SELECT id, user_id, game_mode, score, duration_seconds
             FROM game_sessions
             WHERE session_token = :token
         """
@@ -244,7 +241,6 @@ class JdbcGameSessionRepository(
                 userId = rs.getObject("user_id", UUID::class.java),
                 gameMode = rs.getString("game_mode"),
                 score = rs.getInt("score"),
-                coinsEarned = rs.getInt("total_coins"),
                 durationSeconds = rs.getInt("duration_seconds")
             )
         }.singleOrNull()
