@@ -49,18 +49,16 @@ class JdbcPlayerProgressRepository(
         level: Int,
         score: Int,
         lives: Int,
-        coins: Int,
         difficulty: String
     ): PlayerProgressResponse {
         val sql = """
         INSERT INTO player_progress (user_id, game_mode, current_level, last_played_at, score, lives, coins, difficulty)
-        VALUES (:userId, :gameMode, :level, now(), :score, :lives, :coins, :difficulty)
+        VALUES (:userId, :gameMode, :level, now(), :score, :lives, 0, :difficulty)
         ON CONFLICT (user_id, game_mode) DO UPDATE
         SET current_level = EXCLUDED.current_level,
             last_played_at = now(),
             score = EXCLUDED.score,
             lives = EXCLUDED.lives,
-            coins = EXCLUDED.coins,
             difficulty = EXCLUDED.difficulty
         RETURNING user_id, game_mode, current_level, score, lives, coins, difficulty, last_played_at
         """
@@ -71,7 +69,6 @@ class JdbcPlayerProgressRepository(
             .addValue("level", level)
             .addValue("score", score)
             .addValue("lives", lives)
-            .addValue("coins", coins)
             .addValue("difficulty", difficulty)
 
         return jdbcTemplate.query(sql, params) { rs, _ ->

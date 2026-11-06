@@ -83,7 +83,7 @@ class GameSessionServiceImplTest {
                 testUserId,
                 testGameMode,
                 testScore,
-                testCoinsEarned,
+                0,
                 testDuration,
                 testSessionToken
             )
@@ -101,7 +101,7 @@ class GameSessionServiceImplTest {
                 testUserId,
                 testGameMode,
                 testScore,
-                testCoinsEarned,
+                0,
                 testDuration,
                 testSessionToken
             )
@@ -151,21 +151,25 @@ class GameSessionServiceImplTest {
     }
 
     @Test
-    fun `finishGame with negative coins should throw IllegalArgumentException`() {
-        val request = GameResultRequest(testGameMode, testScore, -5, testDuration, testSessionToken)
-        val ex = assertThrows(IllegalArgumentException::class.java) {
-            gameSessionService.finishGame(testUserId, request)
-        }
-        assertEquals("Coins earned cannot be negative", ex.message)
-    }
-
-    @Test
-    fun `finishGame with excessive coins should throw IllegalArgumentException`() {
+    fun `finishGame should ignore client-reported coin rewards`() {
         val request = GameResultRequest(testGameMode, testScore, 99_999, testDuration, testSessionToken)
-        val ex = assertThrows(IllegalArgumentException::class.java) {
-            gameSessionService.finishGame(testUserId, request)
+        val expectedResult = GameSessionResult(0, testSessionId)
+
+        every { userRepository.existsById(testUserId) } returns true
+        every {
+            gameSessionRepository.saveGameSession(
+                testUserId, testGameMode, testScore, 0, testDuration, testSessionToken
+            )
+        } returns expectedResult
+
+        val response = gameSessionService.finishGame(testUserId, request)
+
+        assertEquals(0, response.totalCoins)
+        verify(exactly = 1) {
+            gameSessionRepository.saveGameSession(
+                testUserId, testGameMode, testScore, 0, testDuration, testSessionToken
+            )
         }
-        assertEquals("Coins earned exceed the maximum allowed value", ex.message)
     }
 
     @Test
@@ -259,7 +263,7 @@ class GameSessionServiceImplTest {
         )
         every {
             progressRepository.saveOrUpdate(
-                testUserId, "adventure", 3, 300, 3, 100, "normal"
+                testUserId, "adventure", 3, 300, 3, "normal"
             )
         } returns expected
 
