@@ -186,18 +186,19 @@ class JdbcGameSessionRepositoryIntegrationTest : IntegrationTestBase() {
     }
 
     @Test
-    fun `saveGameSession retry with changed client reward should remain idempotent`() {
+    fun `saveGameSession with a reused token and changed reward should conflict`() {
         val sessionToken = UUID.randomUUID()
 
-        val first = saveSession(
+        saveSession(
             testUserId, testGameMode, testScore, testCoinsEarned, testDuration, sessionToken
         )
-        val retry = saveSession(
-            testUserId, testGameMode, testScore, testCoinsEarned + 1, testDuration, sessionToken
-        )
 
-        assertEquals(first.sessionId, retry.sessionId)
-        assertEquals(first.totalCoins, retry.totalCoins)
+        assertThrows(DuplicateGameSessionException::class.java) {
+            saveSession(
+                testUserId, testGameMode, testScore, testCoinsEarned + 1, testDuration, sessionToken
+            )
+        }
+
         assertEquals(1, jdbcTemplate.queryForObject(
             "SELECT COUNT(*) FROM game_sessions WHERE user_id = ?",
             Int::class.java,
