@@ -125,8 +125,6 @@ class GameSessionServiceImpl(
             level = request.currentLevel,
             score = request.score,
             lives = request.lives,
-            // Keep client-supplied coin values out of persistent progress.
-            coins = 0,
             difficulty = request.difficulty
         )
     }
