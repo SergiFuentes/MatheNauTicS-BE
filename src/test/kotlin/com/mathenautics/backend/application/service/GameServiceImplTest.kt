@@ -259,7 +259,7 @@ class GameSessionServiceImplTest {
         )
         every {
             progressRepository.saveOrUpdate(
-                testUserId, "adventure", 3, 300, 3, 100, "normal"
+                testUserId, "adventure", 3, 300, 3, "normal"
             )
         } returns expected
 
