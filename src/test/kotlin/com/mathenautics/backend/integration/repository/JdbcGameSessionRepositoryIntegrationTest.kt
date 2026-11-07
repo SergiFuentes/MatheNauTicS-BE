@@ -73,15 +73,17 @@ class JdbcGameSessionRepositoryIntegrationTest : IntegrationTestBase() {
             userId = testUserId,
             gameMode = testGameMode,
             sessionToken = sessionToken,
-            expiresAt = expiresAt
+            expiresAt = expiresAt,
+            minigameId = "quiz"
         )
 
         val row = jdbcTemplate.queryForMap(
-            "SELECT user_id, game_mode, expires_at FROM game_session_tickets WHERE session_token = ?",
+            "SELECT user_id, game_mode, minigame_id, expires_at FROM game_session_tickets WHERE session_token = ?",
             sessionToken
         )
         assertEquals(testUserId, row["user_id"])
         assertEquals(testGameMode, row["game_mode"])
+        assertEquals("quiz", row["minigame_id"])
         assertNotNull(row["expires_at"])
     }
 

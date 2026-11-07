@@ -57,10 +57,11 @@ class GameController(
     @GetMapping("/progress")
     fun getProgress(
         @RequestParam gameMode: String,
+        @RequestParam(defaultValue = "default") minigameId: String = "default",
         authentication: Authentication
     ): ResponseEntity<PlayerProgressResponse> {
         val authenticatedUser = authentication.principal as AuthenticatedUser
-        val progress = gameService.getPlayerProgress(authenticatedUser.userId, gameMode)
+        val progress = gameService.getPlayerProgress(authenticatedUser.userId, gameMode, minigameId)
         return ResponseEntity.ok(progress)
     }
 

@@ -48,7 +48,7 @@ class GameSessionServiceImplTest {
     fun `startGame should issue and persist a server-generated session token`() {
         every { userRepository.existsById(testUserId) } returns true
         every {
-            gameSessionRepository.createGameSessionTicket(testUserId, testGameMode, any(), any())
+            gameSessionRepository.createGameSessionTicket(testUserId, testGameMode, any(), any(), "default")
         } returns Unit
 
         val response = gameSessionService.startGame(testUserId, StartGameSessionRequest(testGameMode))
@@ -57,7 +57,22 @@ class GameSessionServiceImplTest {
         assertEquals(testGameMode, response.gameMode)
         assertTrue(response.expiresAt.isAfter(OffsetDateTime.now()))
         verify(exactly = 1) {
-            gameSessionRepository.createGameSessionTicket(testUserId, testGameMode, response.sessionToken, response.expiresAt)
+            gameSessionRepository.createGameSessionTicket(testUserId, testGameMode, response.sessionToken, response.expiresAt, "default")
+        }
+    }
+
+    @Test
+    fun `startGame should preserve the minigame ID`() {
+        every { userRepository.existsById(testUserId) } returns true
+        every {
+            gameSessionRepository.createGameSessionTicket(testUserId, testGameMode, any(), any(), "quiz")
+        } returns Unit
+
+        val response = gameSessionService.startGame(testUserId, StartGameSessionRequest(testGameMode, "quiz"))
+
+        assertEquals("quiz", response.minigameId)
+        verify(exactly = 1) {
+            gameSessionRepository.createGameSessionTicket(testUserId, testGameMode, response.sessionToken, response.expiresAt, "quiz")
         }
     }
 
@@ -67,7 +82,7 @@ class GameSessionServiceImplTest {
             gameSessionService.startGame(testUserId, StartGameSessionRequest("invalid"))
         }
         assertEquals("Invalid game mode", ex.message)
-        verify(exactly = 0) { gameSessionRepository.createGameSessionTicket(any(), any(), any(), any()) }
+        verify(exactly = 0) { gameSessionRepository.createGameSessionTicket(any(), any(), any(), any(), any()) }
     }
 
     // ===================== finishGame =====================
@@ -85,7 +100,8 @@ class GameSessionServiceImplTest {
                 testScore,
                 testCoinsEarned,
                 testDuration,
-                testSessionToken
+                testSessionToken,
+                "default"
             )
         } returns expectedResult
 
@@ -103,7 +119,8 @@ class GameSessionServiceImplTest {
                 testScore,
                 testCoinsEarned,
                 testDuration,
-                testSessionToken
+                testSessionToken,
+                "default"
             )
         }
     }
@@ -121,7 +138,8 @@ class GameSessionServiceImplTest {
                 0,
                 0,
                 0,
-                testSessionToken
+                testSessionToken,
+                "default"
             )
         } returns expectedResult
 
@@ -234,7 +252,7 @@ class GameSessionServiceImplTest {
 
     @Test
     fun `getPlayerProgress with no progress should return default progress`() {
-        every { progressRepository.getProgress(testUserId, "adventure") } returns null
+        every { progressRepository.getProgress(testUserId, "adventure", "default") } returns null
         val response = gameSessionService.getPlayerProgress(testUserId, "adventure")
 
         assertEquals(1, response.currentLevel)
@@ -259,7 +277,7 @@ class GameSessionServiceImplTest {
         )
         every {
             progressRepository.saveOrUpdate(
-                testUserId, "adventure", 3, 300, 3, 100, "normal"
+                testUserId, "adventure", 3, 300, 3, 100, "normal", "default"
             )
         } returns expected
 

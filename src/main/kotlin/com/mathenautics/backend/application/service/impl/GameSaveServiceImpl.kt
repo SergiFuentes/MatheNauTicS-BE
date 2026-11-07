@@ -31,6 +31,7 @@ class GameSaveServiceImpl(
     @Transactional
     override fun create(userId: UUID, request: CreateGameSaveRequest): GameSaveResponse {
         validateName(request.name)
+        validateMinigameId(request.minigameId)
         if (request.gameMode !in VALID_GAME_MODES) {
             throw IllegalArgumentException("Invalid game mode")
         }
@@ -43,7 +44,8 @@ class GameSaveServiceImpl(
             userId = userId,
             gameMode = request.gameMode,
             name = request.name.trim(),
-            state = request.state
+            state = request.state,
+            minigameId = request.minigameId
         )
     }
 
@@ -71,6 +73,12 @@ class GameSaveServiceImpl(
     private fun validateName(name: String) {
         if (name.isBlank() || name.trim().length > MAX_NAME_LENGTH) {
             throw IllegalArgumentException("Save name must contain between 1 and 80 characters")
+        }
+    }
+
+    private fun validateMinigameId(minigameId: String) {
+        if (!minigameId.matches(Regex("^[a-z0-9-]{1,32}$"))) {
+            throw IllegalArgumentException("Invalid minigame ID")
         }
     }
 

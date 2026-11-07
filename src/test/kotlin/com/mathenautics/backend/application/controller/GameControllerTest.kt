@@ -180,7 +180,7 @@ class GameControllerTest {
             lastPlayedAt = OffsetDateTime.now()
         )
 
-        every { gameService.getPlayerProgress(testUserId, "adventure") } returns progress
+        every { gameService.getPlayerProgress(testUserId, "adventure", "default") } returns progress
 
         mockMvc.perform(
             get("/api/v1/games/progress")

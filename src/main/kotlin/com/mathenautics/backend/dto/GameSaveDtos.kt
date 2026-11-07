@@ -7,7 +7,8 @@ import java.util.UUID
 data class CreateGameSaveRequest(
     val gameMode: String,
     val name: String,
-    val state: JsonNode
+    val state: JsonNode,
+    val minigameId: String = "default"
 )
 
 data class UpdateGameSaveRequest(
@@ -22,5 +23,6 @@ data class GameSaveResponse(
     val name: String,
     val state: JsonNode,
     val createdAt: OffsetDateTime,
-    val updatedAt: OffsetDateTime
+    val updatedAt: OffsetDateTime,
+    val minigameId: String = "default"
 )

@@ -7,5 +7,6 @@ data class GameResultRequest(
     val score: Int,
     val coinsEarned: Int,
     val durationSeconds: Int,
-    val sessionToken: UUID
+    val sessionToken: UUID,
+    val minigameId: String = "default"
 )

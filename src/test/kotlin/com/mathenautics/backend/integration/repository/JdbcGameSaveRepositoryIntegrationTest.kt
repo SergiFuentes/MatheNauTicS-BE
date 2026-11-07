@@ -44,10 +44,22 @@ class JdbcGameSaveRepositoryIntegrationTest : IntegrationTestBase() {
 
         assertEquals(testUserId, saved.userId)
         assertEquals("adventure", saved.gameMode)
+        assertEquals("default", saved.minigameId)
         assertEquals("Castle", saved.name)
         assertEquals(3, saved.state["level"].intValue())
         assertEquals(1, gameSaveRepository.findAllByUserId(testUserId).size)
         assertNull(gameSaveRepository.findById(UUID.randomUUID(), saved.id))
+    }
+
+    @Test
+    fun `create should retain the minigame namespace`() {
+        val saved = gameSaveRepository.create(
+            testUserId, "training", "Quiz save", jsonMapper.readTree("""{"question":2}"""), "quiz"
+        )
+
+        assertEquals("quiz", saved.minigameId)
+        assertEquals("quiz", gameSaveRepository.findById(testUserId, saved.id)?.minigameId)
+        assertEquals("quiz", gameSaveRepository.findAllByUserId(testUserId).single().minigameId)
     }
 
     @Test

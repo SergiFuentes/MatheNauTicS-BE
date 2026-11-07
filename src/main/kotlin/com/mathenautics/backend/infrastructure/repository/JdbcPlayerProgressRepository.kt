@@ -15,23 +15,27 @@ class JdbcPlayerProgressRepository(
 
     override fun getProgress(
         userId: UUID,
-        gameMode: String
+        gameMode: String,
+        minigameId: String
     ): PlayerProgressResponse? {
         val sql = """
-        SELECT user_id, game_mode, current_level, score, lives, coins, difficulty, last_played_at
+        SELECT user_id, game_mode, minigame_id, current_level, score, lives, coins, difficulty, last_played_at
         FROM player_progress
         WHERE user_id = :userId
           AND game_mode = :gameMode
+          AND minigame_id = :minigameId
         """
 
         val params = MapSqlParameterSource()
             .addValue("userId", userId)
             .addValue("gameMode", gameMode)
+            .addValue("minigameId", minigameId)
 
         return jdbcTemplate.query(sql, params) { rs, _ ->
             PlayerProgressResponse(
                 userId = rs.getObject("user_id", UUID::class.java),
                 gameMode = rs.getString("game_mode"),
+                minigameId = rs.getString("minigame_id"),
                 currentLevel = rs.getInt("current_level"),
                 score = rs.getInt("score"),
                 lives = rs.getInt("lives"),
@@ -50,24 +54,26 @@ class JdbcPlayerProgressRepository(
         score: Int,
         lives: Int,
         coins: Int,
-        difficulty: String
+        difficulty: String,
+        minigameId: String
     ): PlayerProgressResponse {
         val sql = """
-        INSERT INTO player_progress (user_id, game_mode, current_level, last_played_at, score, lives, coins, difficulty)
-        VALUES (:userId, :gameMode, :level, now(), :score, :lives, :coins, :difficulty)
-        ON CONFLICT (user_id, game_mode) DO UPDATE
+        INSERT INTO player_progress (user_id, game_mode, minigame_id, current_level, last_played_at, score, lives, coins, difficulty)
+        VALUES (:userId, :gameMode, :minigameId, :level, now(), :score, :lives, :coins, :difficulty)
+        ON CONFLICT (user_id, game_mode, minigame_id) DO UPDATE
         SET current_level = EXCLUDED.current_level,
             last_played_at = now(),
             score = EXCLUDED.score,
             lives = EXCLUDED.lives,
             coins = EXCLUDED.coins,
             difficulty = EXCLUDED.difficulty
-        RETURNING user_id, game_mode, current_level, score, lives, coins, difficulty, last_played_at
+        RETURNING user_id, game_mode, minigame_id, current_level, score, lives, coins, difficulty, last_played_at
         """
 
         val params = MapSqlParameterSource()
             .addValue("userId", userId)
             .addValue("gameMode", gameMode)
+            .addValue("minigameId", minigameId)
             .addValue("level", level)
             .addValue("score", score)
             .addValue("lives", lives)
@@ -78,6 +84,7 @@ class JdbcPlayerProgressRepository(
             PlayerProgressResponse(
                 userId = rs.getObject("user_id", UUID::class.java),
                 gameMode = rs.getString("game_mode"),
+                minigameId = rs.getString("minigame_id"),
                 currentLevel = rs.getInt("current_level"),
                 score = rs.getInt("score"),
                 lives = rs.getInt("lives"),

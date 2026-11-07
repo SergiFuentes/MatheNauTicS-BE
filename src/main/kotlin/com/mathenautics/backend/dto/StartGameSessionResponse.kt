@@ -6,5 +6,6 @@ import java.util.UUID
 data class StartGameSessionResponse(
     val sessionToken: UUID,
     val gameMode: String,
-    val expiresAt: OffsetDateTime
+    val expiresAt: OffsetDateTime,
+    val minigameId: String = "default"
 )
