@@ -56,7 +56,7 @@ Render detects pushes to `main`, builds, and rolls out on its own.
 | ------------------------- | ---------------------------------------- |
 | `SPRING_PROFILES_ACTIVE`  | `prod`                                   |
 | `JWT_SECRET`              | generated secret, ≥ 32 bytes (HS256)     |
-| `CORS_ALLOWED_ORIGINS`    | `https://mathenautics.pages.dev`         |
+| `CORS_ALLOWED_ORIGINS`    | `https://mathenautics.pages.dev` (browser production origin)         |
 | `cors.allowed-origin-patterns` | `https://*.mathenautics.pages.dev` (configured in `application-prod.yaml`) |
 | `DB_URL`                  | `jdbc:postgresql://<host>:5432/postgres` |
 | `DB_USERNAME`             | Supabase user                            |
@@ -270,7 +270,7 @@ The combination of those checks is the meaningful validation.
 - Authentication works (`POST /api/v1/auth/login` returns a valid token).
 - CORS is restricted.
 - Production frontend does not call `localhost`.
-- Database migrations are current (schema version 9).
+- Repository migrations currently reach Flyway version 12. Verify the deployed database's Flyway history rather than relying on this repository version alone.
 - The backend is accessible from the deployed frontend.
 
 ### CI

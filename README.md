@@ -1,6 +1,6 @@
 # MatheNauTicS Backend
 
-Backend REST API for **MatheNauTicS**, an educational mathematics game built with Phaser 3.
+Backend REST API for **MatheNauTicS**, an educational mathematics game built with Phaser 4.
 
 The backend provides persistent user accounts, guest users, JWT-based authentication, game sessions, player progression, leaderboards, and account management functionality.
 
@@ -58,13 +58,13 @@ The backend is responsible for:
 * Game mode tracking
 * Health monitoring
 
-The frontend is a Phaser 3 web application that communicates with this backend through a REST API.
+The frontend is a Phaser 4 application that communicates with this backend through a versioned REST API. See the [complete API reference](docs/API.md) for endpoint contracts, JSON examples, authentication, and errors.
 
 ### Architecture
 
 ```text
 ┌────────────────────────────────┐
-│       Phaser 3 Frontend        │
+│       Phaser 4 Frontend        │
 │                                │
 │  Game / UI / User Interface    │
 └────────────────┬───────────────┘
@@ -271,14 +271,14 @@ GET /api/v1/games/leaderboard?limit=10&offset=0&gameMode=adventure
 
 | Technology      | Version             | Purpose                |
 | --------------- | ------------------- | ---------------------- |
-| Kotlin          | 2.0.21              | Backend language       |
-| Spring Boot     | 3.4.3               | Application framework  |
+| Kotlin          | 2.2.21              | Backend language       |
+| Spring Boot     | 4.0.9               | Application framework  |
 | Spring JDBC     | Spring Boot managed | Database access        |
 | Spring Security | Spring Boot managed | Authentication / JWT   |
 | JJWT            | 0.12.6              | JWT signing & parsing  |
 | PostgreSQL      | 42.7.x JDBC driver  | Database driver        |
 | Supabase        | Managed PostgreSQL  | Cloud database         |
-| Flyway          | 10.21.0             | Database migrations    |
+| Flyway          | Spring Boot managed  | Database migrations    |
 | BCrypt          | 0.4                 | Password hashing       |
 | Gradle          | Kotlin DSL          | Build system           |
 | JUnit 5         | Spring Boot managed | Testing                |
@@ -498,7 +498,7 @@ Migration files are located under:
 src/main/resources/db/migration/
 ```
 
-Current production schema version: **9**.
+Current schema migration in the repository: **V12**. Confirm the deployed database's Flyway history before applying or documenting a production release.
 
 Migration history (abbreviated):
 
@@ -512,7 +512,7 @@ Migration history (abbreviated):
 | V6      | Ensure `game_mode` exists and is NOT NULL                   |
 | V7      | Constrain `game_mode IN ('adventure','training')`           |
 | V8      | Add `score`, `lives`, `coins`, `difficulty` to progress     |
-| V9      | Composite primary key `(user_id, game_mode)`                |
+| V9      | Composite primary key `(user_id, game_mode)`                |\n| V10     | Additional schema evolution                                  |\n| V11     | Saved-game persistence                                       |\n| V12     | Server-issued game sessions                                  |
 
 Flyway automatically applies pending migrations when the application starts.
 
@@ -638,7 +638,7 @@ http://localhost:8080
 
 # API
 
-The API is versioned under `/api/v1`, except `/health` and `/` which are top-level.
+The API is versioned under `/api/v1`, except `/health` and `/` which are top-level. For the endpoint-by-endpoint contract and JSON examples, see [docs/API.md](docs/API.md).
 
 ## Authentication
 
