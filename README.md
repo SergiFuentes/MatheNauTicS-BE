@@ -64,7 +64,7 @@ The frontend is a Phaser 4 application that communicates with this backend throu
 
 ```text
 ┌────────────────────────────────┐
-│       Phaser 3 Frontend        │
+│       Phaser 4 Frontend        │
 │                                │
 │  Game / UI / User Interface    │
 └────────────────┬───────────────┘
