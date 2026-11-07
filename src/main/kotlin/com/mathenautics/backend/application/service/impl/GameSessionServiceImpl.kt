@@ -31,6 +31,7 @@ class GameSessionServiceImpl(
     @Transactional
     override fun startGame(userId: UUID, request: StartGameSessionRequest): StartGameSessionResponse {
         if (request.gameMode !in VALID_GAME_MODES) throw IllegalArgumentException("Invalid game mode")
+        validateMinigameId(request.minigameId)
         if (!userRepository.existsById(userId)) throw IllegalArgumentException("User does not exist")
 
         val sessionToken = UUID.randomUUID()
@@ -39,12 +40,14 @@ class GameSessionServiceImpl(
             userId = userId,
             gameMode = request.gameMode,
             sessionToken = sessionToken,
-            expiresAt = expiresAt
+            expiresAt = expiresAt,
+            minigameId = request.minigameId
         )
         return StartGameSessionResponse(
             sessionToken = sessionToken,
             gameMode = request.gameMode,
-            expiresAt = expiresAt
+            expiresAt = expiresAt,
+            minigameId = request.minigameId
         )
     }
 
@@ -61,6 +64,7 @@ class GameSessionServiceImpl(
             throw IllegalArgumentException("Duration exceeds the maximum allowed value")
         }
         if (request.gameMode !in VALID_GAME_MODES) throw IllegalArgumentException("Invalid game mode")
+        validateMinigameId(request.minigameId)
 
         if (!userRepository.existsById(userId)) {
             throw IllegalArgumentException("User does not exist")
@@ -72,7 +76,8 @@ class GameSessionServiceImpl(
             score = request.score,
             coinsEarned = request.coinsEarned,
             durationSeconds = request.durationSeconds,
-            sessionToken = request.sessionToken
+            sessionToken = request.sessionToken,
+            minigameId = request.minigameId
         )
 
         return GameResultResponse(
@@ -98,12 +103,15 @@ class GameSessionServiceImpl(
 
     override fun getPlayerProgress(
         userId: UUID,
-        gameMode: String
+        gameMode: String,
+        minigameId: String
     ): PlayerProgressResponse {
-        return progressRepository.getProgress(userId, gameMode)
+        validateMinigameId(minigameId)
+        return progressRepository.getProgress(userId, gameMode, minigameId)
             ?: PlayerProgressResponse(
                 userId = userId,
                 gameMode = gameMode,
+                minigameId = minigameId,
                 currentLevel = 1,
                 score = 0,
                 lives = 3,
@@ -121,6 +129,7 @@ class GameSessionServiceImpl(
         if (request.currentLevel < 1) throw IllegalArgumentException("Level must be at least 1")
         if (request.currentLevel > MAX_LEVEL) throw IllegalArgumentException("Level exceeds the maximum allowed value")
         if (request.gameMode !in VALID_GAME_MODES) throw IllegalArgumentException("Invalid game mode")
+        validateMinigameId(request.minigameId)
         if (request.difficulty !in VALID_DIFFICULTIES) throw IllegalArgumentException("Invalid difficulty")
 
         return progressRepository.saveOrUpdate(
@@ -130,7 +139,14 @@ class GameSessionServiceImpl(
             score = request.score,
             lives = request.lives,
             coins = request.coins,
-            difficulty = request.difficulty
+            difficulty = request.difficulty,
+            minigameId = request.minigameId
         )
+    }
+
+    private fun validateMinigameId(minigameId: String) {
+        if (!minigameId.matches(Regex("^[a-z0-9-]{1,32}$"))) {
+            throw IllegalArgumentException("Invalid minigame ID")
+        }
     }
 }

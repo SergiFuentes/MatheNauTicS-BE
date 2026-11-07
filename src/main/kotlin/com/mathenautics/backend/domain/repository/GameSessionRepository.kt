@@ -11,7 +11,8 @@ interface GameSessionRepository {
         userId: UUID,
         gameMode: String,
         sessionToken: UUID,
-        expiresAt: OffsetDateTime
+        expiresAt: OffsetDateTime,
+        minigameId: String = "default"
     )
 
     fun saveGameSession(
@@ -20,7 +21,8 @@ interface GameSessionRepository {
         score: Int,
         coinsEarned: Int,
         durationSeconds: Int,
-        sessionToken: UUID
+        sessionToken: UUID,
+        minigameId: String = "default"
     ): GameSessionResult
 
     fun getCurrentCoins(userId: UUID): Int

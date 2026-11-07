@@ -7,7 +7,7 @@ import java.util.UUID
 interface GameSaveRepository {
     fun findAllByUserId(userId: UUID): List<GameSaveResponse>
     fun findById(userId: UUID, saveId: UUID): GameSaveResponse?
-    fun create(userId: UUID, gameMode: String, name: String, state: JsonNode): GameSaveResponse
+    fun create(userId: UUID, gameMode: String, name: String, state: JsonNode, minigameId: String = "default"): GameSaveResponse
     fun update(userId: UUID, saveId: UUID, name: String, state: JsonNode): GameSaveResponse?
     fun delete(userId: UUID, saveId: UUID): Boolean
 }

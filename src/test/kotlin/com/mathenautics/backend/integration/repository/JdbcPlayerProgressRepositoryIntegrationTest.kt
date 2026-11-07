@@ -136,6 +136,30 @@ class JdbcPlayerProgressRepositoryIntegrationTest : IntegrationTestBase() {
     }
 
     @Test
+    fun `progress should remain isolated between minigames`() {
+        progressRepository.saveOrUpdate(
+            userId = testUserId,
+            gameMode = testGameMode,
+            level = 4,
+            minigameId = "quiz"
+        )
+        progressRepository.saveOrUpdate(
+            userId = testUserId,
+            gameMode = testGameMode,
+            level = 9,
+            minigameId = "snake"
+        )
+
+        assertEquals(4, progressRepository.getProgress(testUserId, testGameMode, "quiz")?.currentLevel)
+        assertEquals(9, progressRepository.getProgress(testUserId, testGameMode, "snake")?.currentLevel)
+        assertEquals(2, jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM player_progress WHERE user_id = ? AND game_mode = ?",
+            Int::class.java,
+            testUserId, testGameMode
+        ))
+    }
+
+    @Test
     fun `getProgress should return null for non-existing user or game mode`() {
         // When
         val progress = progressRepository.getProgress(testUserId, "nonexistent")

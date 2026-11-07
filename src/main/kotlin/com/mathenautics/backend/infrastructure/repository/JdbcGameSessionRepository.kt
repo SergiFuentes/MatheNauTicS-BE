@@ -21,6 +21,7 @@ class JdbcGameSessionRepository(
         val sessionId: Long,
         val userId: UUID,
         val gameMode: String,
+        val minigameId: String,
         val score: Int,
         val coinsEarned: Int,
         val durationSeconds: Int
@@ -30,16 +31,18 @@ class JdbcGameSessionRepository(
         userId: UUID,
         gameMode: String,
         sessionToken: UUID,
-        expiresAt: OffsetDateTime
+        expiresAt: OffsetDateTime,
+        minigameId: String
     ) {
         val sql = """
-            INSERT INTO game_session_tickets (session_token, user_id, game_mode, expires_at)
-            VALUES (:sessionToken, :userId, :gameMode, :expiresAt)
+            INSERT INTO game_session_tickets (session_token, user_id, game_mode, minigame_id, expires_at)
+            VALUES (:sessionToken, :userId, :gameMode, :minigameId, :expiresAt)
         """
         val params = MapSqlParameterSource()
             .addValue("sessionToken", sessionToken)
             .addValue("userId", userId)
             .addValue("gameMode", gameMode)
+            .addValue("minigameId", minigameId)
             .addValue("expiresAt", expiresAt)
         jdbcTemplate.update(sql, params)
     }
@@ -50,7 +53,8 @@ class JdbcGameSessionRepository(
         score: Int,
         coinsEarned: Int,
         durationSeconds: Int,
-        sessionToken: UUID
+        sessionToken: UUID,
+        minigameId: String
     ): GameSessionResult {
         // Completed sessions remain idempotent: retries return the original result,
         // including after the ticket expires or has already been consumed.
@@ -59,7 +63,7 @@ class JdbcGameSessionRepository(
             if (existing.userId != userId) {
                 throw DuplicateGameSessionException("Session token already used by another user")
             }
-            ensureSamePayload(existing, gameMode, score, coinsEarned, durationSeconds)
+            ensureSamePayload(existing, gameMode, minigameId, score, coinsEarned, durationSeconds)
             return GameSessionResult(
                 totalCoins = getCurrentCoins(userId),
                 sessionId = existing.sessionId
@@ -69,7 +73,7 @@ class JdbcGameSessionRepository(
         // Lock the server-issued ticket so concurrent finish requests cannot both
         // consume it. Recheck for a completed session after acquiring the lock.
         val ticketSql = """
-            SELECT user_id, game_mode, expires_at, finished_at
+            SELECT user_id, game_mode, minigame_id, expires_at, finished_at
             FROM game_session_tickets
             WHERE session_token = :sessionToken
             FOR UPDATE
@@ -81,12 +85,13 @@ class JdbcGameSessionRepository(
             mapOf(
                 "userId" to rs.getObject("user_id", UUID::class.java),
                 "gameMode" to rs.getString("game_mode"),
+                "minigameId" to rs.getString("minigame_id"),
                 "expiresAt" to rs.getObject("expires_at", OffsetDateTime::class.java),
                 "finishedAt" to rs.getObject("finished_at", OffsetDateTime::class.java)
             )
         }.singleOrNull() ?: throw IllegalArgumentException("Invalid game session ticket")
 
-        if (ticket["userId"] != userId || ticket["gameMode"] != gameMode) {
+        if (ticket["userId"] != userId || ticket["gameMode"] != gameMode || ticket["minigameId"] != minigameId) {
             throw IllegalArgumentException("Game session ticket does not match this user or game mode")
         }
 
@@ -95,7 +100,7 @@ class JdbcGameSessionRepository(
             if (racedSession.userId != userId) {
                 throw DuplicateGameSessionException("Session token already used by another user")
             }
-            ensureSamePayload(racedSession, gameMode, score, coinsEarned, durationSeconds)
+            ensureSamePayload(racedSession, gameMode, minigameId, score, coinsEarned, durationSeconds)
             return GameSessionResult(
                 totalCoins = getCurrentCoins(userId),
                 sessionId = racedSession.sessionId
@@ -124,14 +129,15 @@ class JdbcGameSessionRepository(
         }
 
         val insertSql = """
-            INSERT INTO game_sessions (user_id, game_mode, score, total_coins, duration_seconds, session_token)
-            VALUES (:userId, :gameMode, :score, :totalCoins, :durationSeconds, :sessionToken)
+            INSERT INTO game_sessions (user_id, game_mode, minigame_id, score, total_coins, duration_seconds, session_token)
+            VALUES (:userId, :gameMode, :minigameId, :score, :totalCoins, :durationSeconds, :sessionToken)
             RETURNING id
         """
 
         val params = MapSqlParameterSource()
             .addValue("userId", userId)
             .addValue("gameMode", gameMode)
+            .addValue("minigameId", minigameId)
             .addValue("score", score)
             .addValue("totalCoins", coinsEarned)
             .addValue("durationSeconds", durationSeconds)
@@ -145,7 +151,7 @@ class JdbcGameSessionRepository(
             // Concurrent request with the same token won the race.
             val raced = findSessionByToken(sessionToken)
             if (raced != null && raced.userId == userId) {
-                ensureSamePayload(raced, gameMode, score, coinsEarned, durationSeconds)
+                ensureSamePayload(raced, gameMode, minigameId, score, coinsEarned, durationSeconds)
                 return GameSessionResult(
                     totalCoins = getCurrentCoins(userId),
                     sessionId = raced.sessionId
@@ -213,12 +219,14 @@ class JdbcGameSessionRepository(
     private fun ensureSamePayload(
         existing: ExistingSession,
         gameMode: String,
+        minigameId: String,
         score: Int,
         coinsEarned: Int,
         durationSeconds: Int
     ) {
         if (
             existing.gameMode != gameMode ||
+            existing.minigameId != minigameId ||
             existing.score != score ||
             existing.coinsEarned != coinsEarned ||
             existing.durationSeconds != durationSeconds
@@ -231,7 +239,7 @@ class JdbcGameSessionRepository(
 
     private fun findSessionByToken(token: UUID): ExistingSession? {
         val sql = """
-            SELECT id, user_id, game_mode, score, total_coins, duration_seconds
+            SELECT id, user_id, game_mode, minigame_id, score, total_coins, duration_seconds
             FROM game_sessions
             WHERE session_token = :token
         """
@@ -243,6 +251,7 @@ class JdbcGameSessionRepository(
                 sessionId = rs.getLong("id"),
                 userId = rs.getObject("user_id", UUID::class.java),
                 gameMode = rs.getString("game_mode"),
+                minigameId = rs.getString("minigame_id"),
                 score = rs.getInt("score"),
                 coinsEarned = rs.getInt("total_coins"),
                 durationSeconds = rs.getInt("duration_seconds")

@@ -19,7 +19,8 @@ interface GameSessionService {
 
     fun getPlayerProgress(
         userId: UUID,
-        gameMode: String
+        gameMode: String,
+        minigameId: String = "default"
     ): PlayerProgressResponse
 
     fun updatePlayerProgress(

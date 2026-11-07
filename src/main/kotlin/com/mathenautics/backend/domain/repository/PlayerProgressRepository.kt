@@ -12,7 +12,7 @@ interface PlayerProgressRepository {
      * Retrieves the progress for a given user and game mode.
      * @return the progress response, or null if not found
      */
-    fun getProgress(userId: UUID, gameMode: String): PlayerProgressResponse?
+    fun getProgress(userId: UUID, gameMode: String, minigameId: String = "default"): PlayerProgressResponse?
 
     /**
      * Inserts or updates the player's progress.
@@ -32,6 +32,7 @@ interface PlayerProgressRepository {
         score: Int = 0,
         lives: Int = 3,
         coins: Int = 0,
-        difficulty: String = "normal"
+        difficulty: String = "normal",
+        minigameId: String = "default"
     ): PlayerProgressResponse
 }

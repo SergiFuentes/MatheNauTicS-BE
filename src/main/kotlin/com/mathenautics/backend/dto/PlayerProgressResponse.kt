@@ -11,5 +11,6 @@ data class PlayerProgressResponse(
     val lives: Int,
     val coins: Int,
     val difficulty: String,
-    val lastPlayedAt: OffsetDateTime
+    val lastPlayedAt: OffsetDateTime,
+    val minigameId: String = "default"
 )

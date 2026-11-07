@@ -6,5 +6,6 @@ data class PlayerProgressRequest(
     val score: Int = 0,
     val lives: Int = 3,
     val coins: Int = 0,
-    val difficulty: String = "normal"
+    val difficulty: String = "normal",
+    val minigameId: String = "default"
 )

@@ -20,7 +20,7 @@ class JdbcGameSaveRepository(
 
     override fun findAllByUserId(userId: UUID): List<GameSaveResponse> {
         val sql = """
-            SELECT id, user_id, game_mode, name, state, created_at, updated_at
+            SELECT id, user_id, game_mode, minigame_id, name, state, created_at, updated_at
             FROM game_saves
             WHERE user_id = :userId
             ORDER BY updated_at DESC, id
@@ -29,6 +29,7 @@ class JdbcGameSaveRepository(
             rs.getObject("id", UUID::class.java),
             rs.getObject("user_id", UUID::class.java),
             rs.getString("game_mode"),
+            rs.getString("minigame_id"),
             rs.getString("name"),
             rs.getString("state"),
             rs.getObject("created_at", OffsetDateTime::class.java),
@@ -38,7 +39,7 @@ class JdbcGameSaveRepository(
 
     override fun findById(userId: UUID, saveId: UUID): GameSaveResponse? {
         val sql = """
-            SELECT id, user_id, game_mode, name, state, created_at, updated_at
+            SELECT id, user_id, game_mode, minigame_id, name, state, created_at, updated_at
             FROM game_saves
             WHERE user_id = :userId AND id = :saveId
         """
@@ -46,6 +47,7 @@ class JdbcGameSaveRepository(
             rs.getObject("id", UUID::class.java),
             rs.getObject("user_id", UUID::class.java),
             rs.getString("game_mode"),
+            rs.getString("minigame_id"),
             rs.getString("name"),
             rs.getString("state"),
             rs.getObject("created_at", OffsetDateTime::class.java),
@@ -58,7 +60,8 @@ class JdbcGameSaveRepository(
         userId: UUID,
         gameMode: String,
         name: String,
-        state: JsonNode
+        state: JsonNode,
+        minigameId: String
     ): GameSaveResponse {
         // Serializes slot creation for a user so concurrent requests cannot exceed the limit.
         val userExists = jdbcTemplate.query(
@@ -75,18 +78,20 @@ class JdbcGameSaveRepository(
         if (count >= MAX_SAVES_PER_USER) throw GameSaveLimitExceededException()
 
         val sql = """
-            INSERT INTO game_saves (user_id, game_mode, name, state)
-            VALUES (:userId, :gameMode, :name, CAST(:state AS jsonb))
-            RETURNING id, user_id, game_mode, name, state, created_at, updated_at
+            INSERT INTO game_saves (user_id, game_mode, minigame_id, name, state)
+            VALUES (:userId, :gameMode, :minigameId, :name, CAST(:state AS jsonb))
+            RETURNING id, user_id, game_mode, minigame_id, name, state, created_at, updated_at
         """
         val insertParams = params(userId)
             .addValue("gameMode", gameMode)
+            .addValue("minigameId", minigameId)
             .addValue("name", name)
             .addValue("state", jsonMapper.writeValueAsString(state))
         return jdbcTemplate.query(sql, insertParams) { rs, _ -> mapSave(
             rs.getObject("id", UUID::class.java),
             rs.getObject("user_id", UUID::class.java),
             rs.getString("game_mode"),
+            rs.getString("minigame_id"),
             rs.getString("name"),
             rs.getString("state"),
             rs.getObject("created_at", OffsetDateTime::class.java),
@@ -104,7 +109,7 @@ class JdbcGameSaveRepository(
             UPDATE game_saves
             SET name = :name, state = CAST(:state AS jsonb), updated_at = now()
             WHERE user_id = :userId AND id = :saveId
-            RETURNING id, user_id, game_mode, name, state, created_at, updated_at
+            RETURNING id, user_id, game_mode, minigame_id, name, state, created_at, updated_at
         """
         val updateParams = params(userId)
             .addValue("saveId", saveId)
@@ -114,6 +119,7 @@ class JdbcGameSaveRepository(
             rs.getObject("id", UUID::class.java),
             rs.getObject("user_id", UUID::class.java),
             rs.getString("game_mode"),
+            rs.getString("minigame_id"),
             rs.getString("name"),
             rs.getString("state"),
             rs.getObject("created_at", OffsetDateTime::class.java),
@@ -132,6 +138,7 @@ class JdbcGameSaveRepository(
         id: UUID,
         userId: UUID,
         gameMode: String,
+        minigameId: String,
         name: String,
         stateJson: String,
         createdAt: OffsetDateTime,
@@ -140,6 +147,7 @@ class JdbcGameSaveRepository(
         id = id,
         userId = userId,
         gameMode = gameMode,
+        minigameId = minigameId,
         name = name,
         state = jsonMapper.readTree(stateJson),
         createdAt = createdAt,
