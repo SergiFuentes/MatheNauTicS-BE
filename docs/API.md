@@ -350,3 +350,26 @@ const progress = await response.json();
 
 - [Deployment and production verification](../DEPLOYMENT.md)
 - [Backend README](../README.md)
+
+
+## Minigame identifiers and training operations
+
+The frontend currently exposes these minigame identifiers in the training menu:
+
+| Menu label | Phaser scene | `minigameId` sent by the scene |
+|---|---|---|
+| Shooter | `MathSpaceShooterScene` | `shooter` |
+| Quiz | `MathQuizScene` | `quiz` |
+| Snake | `MathSnakeScene` | `snake` |
+| Defense | `MathDefenseScene` | `defense` |
+
+These are frontend identifiers used by the minigame session integration; the backend request field is still a string with a default of `default`. The API does not define a server-side enum or guarantee that arbitrary identifiers are rejected.
+
+Keep the concepts separate:
+
+- `gameMode` is the backend game-mode dimension (for the minigames above, the frontend sends `training`).
+- `minigameId` identifies the minigame (`shooter`, `quiz`, `snake`, or `defense`).
+- The selected training operation is frontend game state: `sumar`, `restar`, `dividir`, or `mix`. It is not the `minigameId`.
+- `multiplicar` is a separate training route through `TimeTableScene`; do not document it as one of the four minigame IDs.
+
+When checking progress or saved-game records for a minigame, use the same `gameMode` and `minigameId` consistently. The current API reference describes the request contract; it does not assert that the backend independently validates the frontend's menu combinations.
