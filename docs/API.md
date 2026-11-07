@@ -372,4 +372,32 @@ Keep the concepts separate:
 - The selected training operation is frontend game state: `sumar`, `restar`, `dividir`, or `mix`. It is not the `minigameId`.
 - `multiplicar` is a separate training route through `TimeTableScene`; do not document it as one of the four minigame IDs.
 
+
+### Example: start and finish a training minigame
+
+For example, the Snake minigame starts a session with `gameMode: "training"` and `minigameId: "snake"`. The client receives the session token from the start response and reuses it when submitting the result:
+
+```http
+POST /api/v1/games/start
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{ "gameMode": "training", "minigameId": "snake" }
+```
+
+The finish request uses the returned `sessionToken`:
+
+```json
+{
+  "gameMode": "training",
+  "minigameId": "snake",
+  "score": 300,
+  "coinsEarned": 0,
+  "durationSeconds": 90,
+  "sessionToken": "<sessionToken-from-start>"
+}
+```
+
+Use the matching `gameMode` and `minigameId` for the corresponding progress request, for example `GET /api/v1/games/progress?gameMode=training&minigameId=snake`. Replace `snake` with `shooter`, `quiz`, or `defense` for the other minigames. The selected operation (`sumar`, `restar`, `dividir`, or `mix`) is not a field in the current session API payload; it is selected and used by the frontend question generator.
+
 When checking progress or saved-game records for a minigame, use the same `gameMode` and `minigameId` consistently. The current API reference describes the request contract; it does not assert that the backend independently validates the frontend's menu combinations.
