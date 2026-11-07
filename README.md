@@ -906,11 +906,13 @@ http://192.168.61.55:5500
 
 ## Production
 
-The production origin is supplied via the `CORS_ALLOWED_ORIGINS` environment variable and is restricted to:
+The primary browser production origin is supplied via the `CORS_ALLOWED_ORIGINS` environment variable:
 
 ```text
 https://mathenautics.pages.dev
 ```
+
+The production profile additionally allows the exact Capacitor Android WebView origin `https://localhost` and Cloudflare Pages preview subdomains through `cors.allowed-origin-patterns`. Do not add broad wildcard origins as a workaround.
 
 CORS is never configured with `*`. Development origins are not present in production.
 

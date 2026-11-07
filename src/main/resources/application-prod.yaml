@@ -14,7 +14,7 @@ logging:
     org.flywaydb: INFO
 
 cors:
-  # Exact production origin remains environment-configured. Allow only this
-  # project's Cloudflare Pages preview subdomains in addition.
+  # Keep the primary production origin environment-configured. Also allow the
+  # Capacitor Android WebView origin and this project's Pages preview subdomains.
   allowed-origins: ${CORS_ALLOWED_ORIGINS}
-  allowed-origin-patterns: https://*.mathenautics.pages.dev
+  allowed-origin-patterns: https://localhost,https://*.mathenautics.pages.dev
