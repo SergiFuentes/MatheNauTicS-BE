@@ -233,6 +233,63 @@ class JdbcUserRepositoryIntegrationTest : IntegrationTestBase() {
     }
 
     @Test
+    fun `delete should cascade to all user-owned gameplay data`() {
+        val userId = insertTestUser()
+        val sessionToken = UUID.randomUUID()
+        val ticketToken = UUID.randomUUID()
+
+        jdbcTemplate.update(
+            """
+            INSERT INTO game_sessions
+                (user_id, game_mode, score, total_coins, duration_seconds, session_token)
+            VALUES (?, 'adventure', 10, 5, 120, ?)
+            """,
+            userId, sessionToken
+        )
+        jdbcTemplate.update(
+            """
+            INSERT INTO player_progress
+                (user_id, game_mode, minigame_id, current_level, score, lives, coins, difficulty)
+            VALUES (?, 'adventure', 'default', 2, 10, 3, 5, 'normal')
+            """,
+            userId
+        )
+        jdbcTemplate.update(
+            """
+            INSERT INTO game_saves (user_id, game_mode, name, state)
+            VALUES (?, 'adventure', 'Test save', '{}'::jsonb)
+            """,
+            userId
+        )
+        jdbcTemplate.update(
+            """
+            INSERT INTO game_session_tickets (session_token, user_id, game_mode, expires_at)
+            VALUES (?, ?, 'adventure', CURRENT_TIMESTAMP + INTERVAL '1 hour')
+            """,
+            ticketToken, userId
+        )
+
+        val deleted = userRepository.delete(userId)
+
+        assertTrue(deleted)
+        assertEquals(0, jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM users WHERE id = ?", Int::class.java, userId
+        ))
+        assertEquals(0, jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM game_sessions WHERE user_id = ?", Int::class.java, userId
+        ))
+        assertEquals(0, jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM player_progress WHERE user_id = ?", Int::class.java, userId
+        ))
+        assertEquals(0, jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM game_saves WHERE user_id = ?", Int::class.java, userId
+        ))
+        assertEquals(0, jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM game_session_tickets WHERE user_id = ?", Int::class.java, userId
+        ))
+    }
+
+    @Test
     fun `delete should return false for non-existing user`() {
         // When
         val deleted = userRepository.delete(UUID.randomUUID())
